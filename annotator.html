@@ -2852,11 +2852,6 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     <span style="margin-left:auto;color:var(--text2)">${user||'?'}</span>
   `;
   document.body.insertBefore(banner, document.body.firstChild);
-  // Ajuster la hauteur du layout pour laisser place au bandeau
-  const mainEl = document.getElementById('main');
-  if(mainEl) mainEl.style.height = 'calc(100vh - 36px - 42px)'; // -bandeau -topbar
-  const topbarEl = document.getElementById('topbar');
-  if(topbarEl) topbarEl.style.marginTop = '0';
 
   const setStatus = (msg, color='var(--text2)') => {
     const el = document.getElementById('platform-status');
@@ -2872,8 +2867,30 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   const { data: job, error: je } = await db.from('jobs').select('*').eq('id', jobId).single();
   if(je || !job) { setStatus('✗ Job introuvable', 'var(--red)'); return; }
 
-  const frameNames = job.frame_names || [];
-  if(!frameNames.length) { setStatus('⚠ Aucune frame', 'var(--amber)'); return; }
+  let frameNames = job.frame_names || [];
+
+  // Si frame_names vide → lister les fichiers dans le Storage
+  if(!frameNames.length) {
+    setStatus(`🔍 Recherche des PCD dans le Storage...`, 'var(--amber)');
+    const folder = prefix.replace(/\/$/, ''); // enlever le slash final
+    const { data: listed, error: le } = await db.storage.from(bucket).list(folder, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+    if(!le && listed && listed.length) {
+      const pcdFiles = listed.filter(f => /\.(pcd|xyz|txt)$/i.test(f.name));
+      frameNames = pcdFiles.map(f => f.name.replace(/\.[^.]+$/, ''));
+      // Sauvegarder frame_names dans la DB pour les prochaines fois
+      if(frameNames.length) {
+        await db.from('jobs').update({
+          frame_names: frameNames,
+          frame_count: frameNames.length,
+          frame_range: frameNames[0] + (frameNames.length > 1 ? ' — ' + frameNames[frameNames.length-1] : ''),
+          pcd_uploaded: true,
+          updated_at: new Date().toISOString()
+        }).eq('id', jobId);
+      }
+    }
+  }
+
+  if(!frameNames.length) { setStatus('⚠ Aucune frame — upload des PCD requis', 'var(--amber)'); return; }
 
   setStatus(`📂 ${frameNames.length} frames — chargement PCD...`, 'var(--amber)');
 
