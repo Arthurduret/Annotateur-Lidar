@@ -1072,30 +1072,31 @@ async function openAnnotator(jobId) {
   currentJobId = jobId;
   const job = JOBS.find(j=>j.id===jobId);
 
-  document.getElementById('ann-job-label').textContent = job ? 'Job #'+job.id?.slice(-6) + ' · ' + (job.frame_range||'') : jobId;
+  document.getElementById('ann-job-label').textContent = job
+    ? 'Job #'+job.id.slice(-6) + ' · ' + (job.frame_range||'') + ' · ' + job.frame_count + ' frames'
+    : jobId;
+
   document.getElementById('ann-page').style.display = 'flex';
   document.getElementById('ann-page').style.flexDirection = 'column';
   document.getElementById('main').querySelector('#content').style.display = 'none';
 
-  // Charger l'annotateur dans le div
   const view = document.getElementById('ann-view');
-  if(!view.hasChildNodes() || view.dataset.job !== jobId) {
-    view.dataset.job = jobId;
-    view.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--t2);font-size:13px;flex-direction:column;gap:12px">
-      <i class="ti ti-loader-2" style="font-size:32px;animation:spin 1s linear infinite"></i>
-      Chargement de l'annotateur...
-      <small style="color:var(--t3);font-size:11px">Ouvrez annotator.html pour annoter ce job</small>
-      <button class="btn btn-primary" onclick="openAnnotatorWindow('${jobId}')"><i class="ti ti-external-link"></i> Ouvrir l'annotateur</button>
-    </div>
-    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
-  }
+  view.dataset.job = jobId;
+
+  // Ouvrir l'annotateur en iframe avec les params Supabase dans l'URL
+  const annUrl = 'annotator.html'
+    + '?job='  + encodeURIComponent(jobId)
+    + '&url='  + encodeURIComponent(SUPABASE_URL)
+    + '&key='  + encodeURIComponent(SUPABASE_KEY)
+    + '&user=' + encodeURIComponent(ME.name);
+
+  view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
 
   // Mettre à jour le statut
   if(job && job.state === 'new') {
     updateJobField(jobId, 'state', 'in progress');
   }
 }
-
 function openAnnotatorWindow(jobId) {
   // Passer le jobId dans l'URL pour que l'annotateur puisse récupérer les données
   const url = 'annotator.html?job=' + jobId + '&url=' + encodeURIComponent(SUPABASE_URL) + '&key=' + encodeURIComponent(SUPABASE_KEY) + '&user=' + ME.name;
