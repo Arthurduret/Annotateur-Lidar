@@ -2852,8 +2852,11 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     <span style="margin-left:auto;color:var(--text2)">${user||'?'}</span>
   `;
   document.body.insertBefore(banner, document.body.firstChild);
-  // Ajuster la hauteur du viewport
-  document.getElementById('app').style.height = 'calc(100vh - 36px)';
+  // Ajuster la hauteur du layout pour laisser place au bandeau
+  const mainEl = document.getElementById('main');
+  if(mainEl) mainEl.style.height = 'calc(100vh - 36px - 42px)'; // -bandeau -topbar
+  const topbarEl = document.getElementById('topbar');
+  if(topbarEl) topbarEl.style.marginTop = '0';
 
   const setStatus = (msg, color='var(--text2)') => {
     const el = document.getElementById('platform-status');
