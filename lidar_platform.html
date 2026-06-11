@@ -820,25 +820,34 @@ async function renderJobs() {
   const list = document.getElementById('jobs-list');
 
   if(!jobs.length) {
-    list.innerHTML = `<div class="empty"><i class="ti ti-briefcase"></i><h3>Aucun job</h3><p>Créez des jobs pour découper la tâche en portions assignables</p><button class="btn btn-primary" style="margin-top:14px" onclick="openNewJobModal()"><i class="ti ti-plus"></i> Créer un job</button></div>`;
+    list.innerHTML = `<div class="empty"><i class="ti ti-briefcase"></i><h3>Aucun job</h3><p>Importez des fichiers PCD ou un ZIP CVAT pour créer des jobs</p><button class="btn btn-primary" style="margin-top:14px" onclick="openImportModal()"><i class="ti ti-upload"></i> Importer</button></div>`;
     return;
   }
 
-  // Regrouper les jobs avec infos frames
-  const members = await getMembers();
   list.innerHTML = jobs.map(j => {
     const stateClass = {new:'s-new','in progress':'s-progress','on review':'s-review',completed:'s-done',rejected:'s-reject'}[j.state]||'s-new';
     const stageClass = {annotation:'stage-ann',review:'stage-rev',acceptance:'stage-acc'}[j.stage]||'stage-ann';
-    const cuboids = j.cuboids || 0;
+    const cuboids    = j.cuboids || 0;
+    const hasPCD     = j.pcd_uploaded || false;
+    const frameNames = j.frame_names || [];
+
     return `
     <div class="job-card" id="jc-${j.id}">
       <div class="job-header">
-        <span class="job-id" onclick="openAnnotator('${j.id}')">Job #${j.id?.slice(-6)||'???'}</span>
+        <span class="job-id">#${j.id?.slice(-6)||'???'}</span>
         <span class="stage ${stageClass}">${j.stage||'annotation'}</span>
         <span class="status ${stateClass}">${j.state||'new'}</span>
-        <span class="job-meta">Créé ${timeAgo(j.created_at)} · mis à jour ${timeAgo(j.updated_at||j.created_at)}</span>
-        <div style="margin-left:auto;display:flex;gap:6px">
-          <button class="btn btn-primary btn-sm" onclick="openAnnotator('${j.id}')"><i class="ti ti-pencil"></i> Annoter</button>
+        <span class="job-meta">${j.frame_count||0} frames · ${j.frame_range||'—'}</span>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          ${hasPCD
+            ? `<span style="font-size:10px;color:var(--green);display:flex;align-items:center;gap:4px"><i class="ti ti-cloud-check"></i> PCD stockés</span>`
+            : `<button class="btn btn-ghost btn-sm" onclick="openUploadPCDModal('${j.id}')" title="Uploader les PCD de ce job">
+                 <i class="ti ti-cloud-upload"></i> Upload PCD
+               </button>`
+          }
+          <button class="btn btn-primary btn-sm" onclick="openAnnotator('${j.id}')">
+            <i class="ti ti-pencil"></i> Annoter
+          </button>
           <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteJob('${j.id}')"><i class="ti ti-trash"></i></button>
         </div>
       </div>
@@ -847,7 +856,6 @@ async function renderJobs() {
           <label>Assigné à</label>
           <select class="job-select" onchange="updateJobField('${j.id}','assignee',this.value)">
             <option value="">— Sélectionner —</option>
-            ${(members).map(m=>`<option value="${m.username}" ${j.assignee===m.username?'selected':''}>${m.username} (${m.role})</option>`).join('')}
           </select>
         </div>
         <div class="job-field">
@@ -870,12 +878,21 @@ async function renderJobs() {
         </div>
         <div class="job-stats">
           <div>Frames: <b>${j.frame_count||0}</b></div>
-          <div>Range: <b>${j.frame_range||'—'}</b></div>
           <div>Cuboïdes: <b style="color:var(--cyan)">${cuboids}</b></div>
+          <div>PCD: <b style="color:${hasPCD?'var(--green)':'var(--text2)'}">${hasPCD?'✓ Stockés':'Non uploadés'}</b></div>
         </div>
       </div>
     </div>`;
   }).join('');
+
+  // Remplir les selects assignee de façon async
+  getMembers().then(members => {
+    jobs.forEach(j => {
+      const sel = document.querySelector(`#jc-${j.id} .job-field select`);
+      if(sel) sel.innerHTML = '<option value="">— Sélectionner —</option>' +
+        members.map(m=>`<option value="${m.username}" ${j.assignee===m.username?'selected':''}>${m.username} (${m.role})</option>`).join('');
+    });
+  });
 }
 
 async function getMembers() {
@@ -1106,7 +1123,98 @@ async function createJob() {
 currentJobId = null;
 let annSaveTimer = null;
 
-async function openAnnotator(jobId) {
+async function openUploadPCDModal(jobId) {
+  const job = JOBS.find(j=>j.id===jobId);
+  if(!job) return;
+  const frameNames = job.frame_names || [];
+  const task = TASKS.find(t=>t.id===job.task_id);
+  const proj = task ? PROJECTS.find(p=>p.id===task.project_id) : null;
+  const prefix = job.storage_prefix || ('pcd/' + (proj?.id||'shared') + '/');
+
+  openModal('Uploader les PCD — Job #'+jobId.slice(-6), `
+    <div style="margin-bottom:12px;font-size:12px;color:var(--t2)">
+      Ce job contient <b style="color:var(--t1)">${frameNames.length} frames</b>.<br>
+      Sélectionne les fichiers PCD correspondants — ils seront stockés dans Supabase et disponibles pour toute l'équipe.
+    </div>
+    <div style="background:var(--s2);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:var(--t3);font-family:monospace">
+      Bucket: lidar-files/${prefix}<br>
+      Frames attendues: ${frameNames.slice(0,3).join(', ')}${frameNames.length>3?'...':''}
+    </div>
+    <div style="border:2px dashed var(--b2);border-radius:8px;padding:20px;text-align:center;cursor:pointer"
+         onclick="document.getElementById('pcd-upload-input').click()"
+         ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
+         ondragleave="this.style.borderColor='var(--b2)'"
+         ondrop="event.preventDefault();this.style.borderColor='var(--b2)';window._pcdUploadFiles=[...event.dataTransfer.files];updatePCDUploadPreview(${frameNames.length})">
+      <div style="font-size:24px;margin-bottom:8px">📁</div>
+      <div style="font-size:12px;color:var(--t1);font-weight:500">Glisser ou cliquer pour sélectionner</div>
+      <div style="font-size:10px;color:var(--t2);margin-top:4px">.pcd · .xyz · .txt</div>
+    </div>
+    <input type="file" id="pcd-upload-input" multiple accept=".pcd,.xyz,.txt"
+           style="display:none"
+           onchange="window._pcdUploadFiles=[...this.files];updatePCDUploadPreview(${frameNames.length})">
+    <div id="pcd-upload-preview" style="margin-top:10px;font-size:11px;color:var(--t2)"></div>
+    <div id="pcd-upload-progress" style="display:none;margin-top:10px">
+      <div style="font-size:11px;color:var(--t2);margin-bottom:4px" id="pcd-upload-label">Upload en cours...</div>
+      <div style="height:4px;background:var(--b1);border-radius:2px"><div id="pcd-upload-bar" style="height:100%;background:var(--cyan);border-radius:2px;width:0%;transition:width .2s"></div></div>
+    </div>
+  `, `
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-primary btn-sm" id="pcd-upload-btn" onclick="doUploadPCDs('${jobId}','${prefix}')" disabled>
+      <i class="ti ti-cloud-upload"></i> Uploader dans Supabase
+    </button>
+  `);
+}
+
+function updatePCDUploadPreview(expectedCount) {
+  const files = window._pcdUploadFiles || [];
+  const btn = document.getElementById('pcd-upload-btn');
+  if(btn) btn.disabled = !files.length;
+  const prev = document.getElementById('pcd-upload-preview');
+  if(!prev) return;
+  prev.innerHTML = files.length
+    ? `<span style="color:var(--cyan)">${files.length} fichier(s) sélectionné(s)</span>
+       ${files.length !== expectedCount ? `<span style="color:var(--amber);margin-left:8px">⚠ ${expectedCount} attendu(s)</span>` : '<span style="color:var(--green);margin-left:8px">✓</span>'}
+       <div style="color:var(--t3);margin-top:3px">${files.map(f=>f.name).slice(0,5).join(', ')}${files.length>5?' ...':''}</div>`
+    : '';
+}
+
+async function doUploadPCDs(jobId, prefix) {
+  const files = window._pcdUploadFiles || [];
+  if(!files.length) return;
+
+  const btn  = document.getElementById('pcd-upload-btn');
+  const bar  = document.getElementById('pcd-upload-bar');
+  const lbl  = document.getElementById('pcd-upload-label');
+  const prog = document.getElementById('pcd-upload-progress');
+  if(btn)  btn.disabled = true;
+  if(prog) prog.style.display = 'block';
+
+  let uploaded = 0;
+  for(const file of files) {
+    const storagePath = prefix + file.name;
+    if(lbl) lbl.textContent = 'Upload: ' + file.name + ' (' + (uploaded+1) + '/' + files.length + ')';
+    if(bar) bar.style.width = Math.round(uploaded/files.length*100) + '%';
+
+    const { error } = await db.storage.from('lidar-files').upload(storagePath, file, { upsert: true });
+    if(error) console.warn('Upload error:', file.name, error.message);
+    else uploaded++;
+  }
+
+  if(bar) bar.style.width = '100%';
+  if(lbl) lbl.textContent = uploaded + '/' + files.length + ' fichiers uploadés ✓';
+
+  // Marquer le job comme ayant ses PCD
+  await db.from('jobs').update({ pcd_uploaded: true, updated_at: new Date().toISOString() }).eq('id', jobId);
+  await loadAll();
+
+  setTimeout(() => {
+    closeModal();
+    toast(uploaded + ' PCD uploadés dans Supabase ✓', '#00e676');
+    renderJobs();
+  }, 800);
+}
+
+function openAnnotator(jobId) {
   currentJobId = jobId;
   const job  = JOBS.find(j=>j.id===jobId);
   const task = job ? TASKS.find(t=>t.id===job.task_id) : null;
