@@ -358,6 +358,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
         <div class="toolbar">
           <span class="toolbar-title" id="jobs-title">Jobs</span>
           <div class="toolbar-sep"></div>
+          <button class="btn btn-ghost btn-sm" onclick="openUploadToTaskModal()"><i class="ti ti-cloud-upload"></i> Ajouter des frames</button>
           <button class="btn btn-primary btn-sm" onclick="openNewJobModal()"><i class="ti ti-plus"></i> Nouveau job</button>
         </div>
         <div class="jobs-container" id="jobs-list"></div>
@@ -1212,6 +1213,132 @@ async function doUploadPCDs(jobId, prefix) {
     toast(uploaded + ' PCD uploadés dans Supabase ✓', '#00e676');
     renderJobs();
   }, 800);
+}
+
+// ── Upload PCD directement dans une tâche → auto-création de jobs ──
+async function openUploadToTaskModal() {
+  const task = TASKS.find(t => t.id === currentTaskId);
+  if(!task) { toast('Sélectionne une tâche d\'abord', '#ff4444'); return; }
+  const proj = PROJECTS.find(p => p.id === task.project_id);
+  const prefix = 'pcd/' + (proj?.id || 'shared') + '/';
+
+  openModal('Ajouter des frames — ' + task.name, `
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.6">
+      Glisse <b style="color:var(--t1)">tous tes fichiers PCD</b> ici. Ils seront uploadés dans Supabase et
+      découpés automatiquement en jobs de la taille choisie, prêts à annoter.
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);white-space:nowrap">Frames par job</label>
+      <input class="form-i" id="utask-chunk" type="number" value="50" min="1" max="500" style="width:80px" oninput="updateUTaskPreview()">
+      <span style="font-size:11px;color:var(--t3)">ex: 50 fichiers PCD = 1 job de 50 frames</span>
+    </div>
+    <div style="border:2px dashed var(--b2);border-radius:8px;padding:28px;text-align:center;cursor:pointer;transition:all .2s" id="utask-drop"
+         onclick="document.getElementById('utask-input').click()"
+         ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
+         ondragleave="this.style.borderColor='var(--b2)'"
+         ondrop="event.preventDefault();this.style.borderColor='var(--b2)';window._utaskFiles=[...event.dataTransfer.files];updateUTaskPreview()">
+      <div style="font-size:30px;margin-bottom:8px">📂</div>
+      <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px">Cliquer ou glisser les fichiers PCD</div>
+      <div style="font-size:11px;color:var(--t2)">.pcd · .xyz · .txt — multi-sélection possible</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:6px">Stockage : lidar-files/${prefix}</div>
+    </div>
+    <input type="file" id="utask-input" multiple accept=".pcd,.xyz,.txt" style="display:none"
+           onchange="window._utaskFiles=[...this.files];updateUTaskPreview()">
+    <div id="utask-preview" style="margin-top:10px;font-size:11px;color:var(--t2)"></div>
+    <div id="utask-progress" style="display:none;margin-top:12px">
+      <div style="font-size:11px;color:var(--t2);margin-bottom:5px" id="utask-progress-lbl">Préparation...</div>
+      <div style="height:5px;background:var(--b1);border-radius:3px">
+        <div id="utask-progress-bar" style="height:100%;background:var(--cyan);border-radius:3px;width:0%;transition:width .15s"></div>
+      </div>
+    </div>
+  `, `
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-primary btn-sm" id="utask-btn" onclick="doUploadToTask('${task.id}','${proj?.id||'shared'}','${prefix}')" disabled>
+      <i class="ti ti-cloud-upload"></i> Uploader & créer les jobs
+    </button>
+  `);
+}
+
+function updateUTaskPreview() {
+  const files = window._utaskFiles || [];
+  const btn = document.getElementById('utask-btn');
+  if(btn) btn.disabled = !files.length;
+  const prev = document.getElementById('utask-preview');
+  if(!prev) return;
+  const chunk = parseInt(document.getElementById('utask-chunk')?.value) || 50;
+  const jobCount = Math.ceil(files.length / chunk);
+  prev.innerHTML = files.length
+    ? `<div style="color:var(--cyan);margin-bottom:4px">
+         <b>${files.length}</b> fichier(s) — <b>${jobCount}</b> job(s) de ~${chunk} frames
+       </div>
+       <div style="color:var(--t3)">${Array.from(files).map(f=>f.name).slice(0,6).join(', ')}${files.length>6?' …':''}</div>`
+    : '';
+}
+
+async function doUploadToTask(taskId, projectId, prefix) {
+  const files = Array.from(window._utaskFiles || []).sort((a,b) => a.name.localeCompare(b.name));
+  if(!files.length) return;
+  const chunk = parseInt(document.getElementById('utask-chunk')?.value) || 50;
+
+  const btn  = document.getElementById('utask-btn');
+  const bar  = document.getElementById('utask-progress-bar');
+  const lbl  = document.getElementById('utask-progress-lbl');
+  const prog = document.getElementById('utask-progress');
+  if(btn)  btn.disabled = true;
+  if(prog) prog.style.display = 'block';
+
+  // ── Étape 1 : upload des PCD vers Supabase Storage ──
+  let uploaded = 0;
+  for(const file of files) {
+    if(lbl) lbl.textContent = 'Upload ' + (uploaded+1) + '/' + files.length + ' — ' + file.name;
+    if(bar) bar.style.width = Math.round(uploaded / files.length * 80) + '%';
+    const { error } = await db.storage.from('lidar-files').upload(prefix + file.name, file, { upsert: true });
+    if(error) console.warn('Upload warning:', file.name, error.message);
+    uploaded++;
+  }
+
+  if(lbl) lbl.textContent = 'Création des jobs...';
+  if(bar) bar.style.width = '85%';
+
+  // ── Étape 2 : créer les jobs par chunks ──
+  const frameNames = files.map(f => f.name.replace(/\.[^.]+$/, ''));
+  let jobsCreated = 0;
+  for(let i = 0; i < frameNames.length; i += chunk) {
+    const chunkFrames = frameNames.slice(i, i + chunk);
+    const { error: je } = await db.from('jobs').insert({
+      task_id:        taskId,
+      frame_names:    chunkFrames,
+      frame_count:    chunkFrames.length,
+      frame_range:    chunkFrames[0] + (chunkFrames.length > 1 ? ' — ' + chunkFrames[chunkFrames.length-1] : ''),
+      storage_prefix: prefix,
+      pcd_uploaded:   true,
+      stage:          'annotation',
+      state:          'new',
+      cuboids:        0,
+      created_by:     ME.name,
+      updated_at:     new Date().toISOString(),
+    });
+    if(je) console.error('Erreur job:', je.message);
+    else   jobsCreated++;
+  }
+
+  // ── Étape 3 : mettre à jour le frame_count de la tâche ──
+  const task = TASKS.find(t => t.id === taskId);
+  const prevCount = task?.frame_count || 0;
+  await db.from('tasks').update({
+    frame_count: prevCount + frameNames.length,
+    updated_at:  new Date().toISOString(),
+  }).eq('id', taskId);
+
+  if(bar) bar.style.width = '100%';
+  if(lbl) lbl.textContent = jobsCreated + ' job(s) créé(s) ✓';
+
+  await loadAll();
+  setTimeout(() => {
+    closeModal();
+    toast(jobsCreated + ' job(s) créé(s) — ' + uploaded + ' PCD uploadés ✓', '#00e676');
+    renderJobs();
+  }, 600);
 }
 
 function openAnnotator(jobId) {
