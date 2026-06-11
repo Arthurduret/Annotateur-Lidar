@@ -1239,7 +1239,8 @@ function openAnnotator(jobId) {
     + '&key='     + encodeURIComponent(SUPABASE_KEY)
     + '&user='    + encodeURIComponent(ME.name)
     + '&bucket='  + encodeURIComponent('lidar-files')
-    + '&prefix='  + encodeURIComponent(storagePrefix);
+    + '&prefix='  + encodeURIComponent(storagePrefix)
+    + '&v='       + Date.now();
 
   view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
 
