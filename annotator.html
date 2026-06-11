@@ -534,6 +534,8 @@ const S = {
   solOp: 1.0,
   selSize: 3,
   classVis: {},   // id -> bool
+  // Platform mode (set by checkURLParams)
+  db: null, jobId: null, bucket: null, prefix: null,
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -2587,6 +2589,37 @@ async function addFrameFiles(files) {
   toast(added + ' frame(s) ajoutee(s) — total: ' + S.frames.length, 'var(--cyan)');
   if(S.frameIdx < 0 && S.frames.length > 0) loadFrame(0);
   else updateFrameUI();
+
+  // ── Mode plateforme : upload PCD vers Storage + mise à jour DB ──
+  if(added > 0 && S.db && S.jobId && S.prefix) {
+    const filesToUpload = Array.from(files).filter(f => {
+      const ext = f.name.split('.').pop().toLowerCase();
+      return ['pcd','xyz','txt'].includes(ext);
+    });
+    if(filesToUpload.length > 0) {
+      toast('Upload vers Supabase Storage...', 'var(--amber)');
+      let uploaded = 0;
+      for(const file of filesToUpload) {
+        const path = S.prefix + file.name;
+        const { error } = await S.db.storage.from(S.bucket).upload(path, file, { upsert: true });
+        if(!error) uploaded++;
+        else console.warn('Upload échoué:', file.name, error.message);
+      }
+      // Mettre à jour frame_names et frame_count dans la DB
+      const allNames = S.frames.map(f => f.name);
+      const firstFrame = allNames[0] || '';
+      const lastFrame  = allNames[allNames.length - 1] || '';
+      const frameRange = allNames.length > 1 ? firstFrame + ' — ' + lastFrame : firstFrame;
+      const { error: ue } = await S.db.from('jobs').update({
+        frame_names: allNames,
+        frame_count: allNames.length,
+        frame_range: frameRange,
+        updated_at: new Date().toISOString()
+      }).eq('id', S.jobId);
+      if(ue) toast('Erreur DB: ' + ue.message, 'var(--red)');
+      else   toast(uploaded + ' PCD uploadé(s) — job mis à jour (' + allNames.length + ' frames)', 'var(--green)');
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2835,6 +2868,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     });
   }
   const db = window.supabase.createClient(sbUrl, sbKey);
+  S.db = db; S.jobId = jobId; S.bucket = bucket; S.prefix = prefix;
   setStatus('✓ Connecté', 'var(--green)');
 
   // Charger le job depuis Supabase
