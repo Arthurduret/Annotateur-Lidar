@@ -1919,7 +1919,7 @@ async function exportSly() {
     })),
     tags: [
       {name:'occluded', value_type:'any_string', color:'', id:1, hotkey:'', applicable_type:'objectsOnly', classes:[]},
-      {name:'name',     value_type:'any_string', color:'', id:2, hotkey:'', applicable_type:'imagesOnly',  classes:[], value:'annotator'},
+      {name:'name',     value_type:'any_string', color:'', id:2, hotkey:'', applicable_type:'imagesOnly',  classes:[], value:(S.username||'annotator')},
       {name:'labels',   value_type:'any_string', color:'', id:3, hotkey:'', applicable_type:'imagesOnly',  classes:[], value:labelsValue},
       {name:'keyframe', value_type:'any_string', color:'', id:4, hotkey:'', applicable_type:'objectsOnly', classes:[]}
     ],
@@ -1984,7 +1984,7 @@ async function exportSly() {
       description: '',
       key: frameKey,
       tags: [
-        {key:tagNameKey,   name:'name',   value:'annotator',  labelerLogin:'', createdAt:now, updatedAt:now},
+        {key:tagNameKey,   name:'name',   value:(S.username||'annotator'),  labelerLogin:'', createdAt:now, updatedAt:now},
         {key:tagLabelsKey, name:'labels', value:labelsValue,  labelerLogin:'', createdAt:now, updatedAt:now}
       ],
       objects:  annObjects,
@@ -2862,7 +2862,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   if(!window.supabase) { setStatus('✗ Supabase non chargé', 'var(--red)'); return; }
   const db = window.supabase.createClient(sbUrl, sbKey);
-  S.db = db; S.jobId = jobId; S.bucket = bucket; S.prefix = prefix;
+  S.db = db; S.jobId = jobId; S.bucket = bucket; S.prefix = prefix; S.username = user || 'annotator';
   setStatus('✓ Connecté', 'var(--green)');
 
   // Charger le job depuis Supabase
@@ -2972,6 +2972,16 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
       if(ue) toast('Erreur: '+ue.message, 'var(--red)');
       else   toast('Sauvegardé ✓ — '+totalCubs+' cuboïdes', 'var(--green)');
     };
+  }
+
+  // Bouton export CVAT ZIP (conservé en mode plateforme)
+  const expJsonBtn = document.getElementById('btn-exp-json');
+  if(expJsonBtn) {
+    const exportCvatBtn = document.createElement('button');
+    exportCvatBtn.className = 'ab ab-sec';
+    exportCvatBtn.innerHTML = '⬇ Export CVAT ZIP';
+    exportCvatBtn.onclick = exportSly;
+    expJsonBtn.parentNode.insertBefore(exportCvatBtn, expJsonBtn);
   }
 })();
 requestAnimationFrame(()=>resize());
