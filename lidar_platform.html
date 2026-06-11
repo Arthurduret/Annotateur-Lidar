@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiDAR Annotate</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#07090f;--s1:#0d1018;--s2:#111520;--s3:#161b28;--s4:#1c2438;
+  --b1:#1a2235;--b2:#232d42;--b3:#2d3a55;
+  --t1:#c8d4f0;--t2:#6a7a9a;--t3:#3a4a6a;
+  --cyan:#00d4ff;--cyan2:rgba(0,212,255,.12);
+  --green:#00e676;--green2:rgba(0,230,118,.12);
+  --amber:#ffb300;--amber2:rgba(255,179,0,.12);
+  --red:#ff4444;--red2:rgba(255,68,68,.12);
+  --purple:#7c6bff;--purple2:rgba(124,107,255,.12);
+  --r:5px;--r2:8px;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-family:var(--font);font-size:13px}
+
+/* ── LOGIN ── */
+#login-screen{
+  position:fixed;inset:0;z-index:200;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;
+}
+.login-box{
+  width:340px;background:var(--s1);border:1px solid var(--b2);border-radius:12px;
+  padding:32px;box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;justify-content:center}
+.login-logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--cyan),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#000;font-weight:700}
+.login-logo-text{font-size:18px;font-weight:700;color:var(--t1)}
+.login-logo-text span{color:var(--cyan)}
+.login-label{font-size:11px;color:var(--t2);margin-bottom:6px;display:block;font-weight:500}
+.login-input{width:100%;background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-family:var(--font);font-size:13px;padding:9px 12px;border-radius:var(--r);margin-bottom:12px;transition:border-color .15s}
+.login-input:focus{outline:none;border-color:var(--cyan)}
+.login-btn{width:100%;padding:10px;background:var(--cyan);color:#000;border:none;border-radius:var(--r);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s;margin-top:4px}
+.login-btn:hover{filter:brightness(1.1)}
+.login-err{font-size:11px;color:var(--red);margin-top:8px;text-align:center;min-height:16px}
+
+/* ── APP LAYOUT ── */
+#app{display:flex;flex-direction:column;height:100%}
+
+/* ── TOPBAR ── */
+#topbar{
+  height:48px;background:var(--s1);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;flex-shrink:0;
+}
+.tb-logo{display:flex;align-items:center;gap:8px;padding:0 20px;border-right:1px solid var(--b1);height:100%;cursor:pointer}
+.tb-logo-icon{width:26px;height:26px;background:linear-gradient(135deg,var(--cyan),var(--purple));border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#000;font-weight:700}
+.tb-logo-text{font-size:13px;font-weight:600}
+.tb-logo-text span{color:var(--cyan)}
+.tb-nav{display:flex;height:100%}
+.tb-nav a{
+  display:flex;align-items:center;gap:6px;padding:0 16px;
+  border-bottom:2px solid transparent;cursor:pointer;
+  font-size:12px;color:var(--t2);transition:all .12s;
+  text-decoration:none;border-right:1px solid var(--b1);
+}
+.tb-nav a:hover{color:var(--t1);background:var(--s2)}
+.tb-nav a.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tb-nav a i{font-size:15px}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:8px;padding:0 16px}
+.tb-user{display:flex;align-items:center;gap:8px;cursor:pointer;padding:5px 10px;border-radius:var(--r);transition:background .12s}
+.tb-user:hover{background:var(--s2)}
+.avatar{width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--purple));display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#000;flex-shrink:0}
+
+/* ── BREADCRUMB ── */
+#breadcrumb{
+  height:36px;background:var(--s1);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;padding:0 20px;gap:6px;
+  font-size:12px;color:var(--t2);flex-shrink:0;
+}
+.bc-sep{color:var(--t3)}
+.bc-link{cursor:pointer;transition:color .12s}
+.bc-link:hover{color:var(--cyan)}
+.bc-current{color:var(--t1);font-weight:500}
+
+/* ── MAIN ── */
+#main{flex:1;overflow:hidden;display:flex;min-height:0}
+#content{flex:1;overflow-y:auto;min-width:0}
+#content::-webkit-scrollbar{width:4px}
+#content::-webkit-scrollbar-thumb{background:var(--b2)}
+
+/* ── TOOLBAR ── */
+.toolbar{
+  display:flex;align-items:center;gap:10px;padding:14px 20px;
+  border-bottom:1px solid var(--b1);background:var(--s1);
+  flex-wrap:wrap;
+}
+.toolbar-title{font-size:15px;font-weight:600;color:var(--t1)}
+.toolbar-sep{flex:1}
+.search-box{
+  display:flex;align-items:center;gap:6px;background:var(--s2);
+  border:1px solid var(--b2);border-radius:var(--r);padding:6px 10px;
+  min-width:200px;
+}
+.search-box i{color:var(--t2);font-size:14px}
+.search-box input{background:transparent;border:none;color:var(--t1);font-family:var(--font);font-size:12px;outline:none;width:100%}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--r);font-family:var(--font);font-size:12px;cursor:pointer;transition:all .12s;font-weight:500;white-space:nowrap;border:none}
+.btn i{font-size:14px}
+.btn-primary{background:var(--cyan);color:#000}.btn-primary:hover{filter:brightness(1.1)}
+.btn-ghost{background:transparent;color:var(--t2);border:1px solid var(--b2)}.btn-ghost:hover{color:var(--t1);border-color:var(--b3)}
+.btn-danger{background:var(--red2);color:var(--red);border:1px solid rgba(255,68,68,.2)}.btn-danger:hover{background:rgba(255,68,68,.2)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-sm i{font-size:12px}
+.btn-icon{padding:6px;border-radius:var(--r)}
+
+/* ── PROJECTS GRID (style CVAT) ── */
+.projects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:20px}
+.project-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);
+  overflow:hidden;cursor:pointer;transition:all .15s;
+}
+.project-card:hover{border-color:var(--b3);box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.project-thumb{
+  height:140px;background:var(--s3);display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.project-thumb-icon{font-size:40px;color:var(--t3)}
+.project-thumb-badge{
+  position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);
+  color:var(--cyan);font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:3px;
+}
+.project-info{padding:12px 14px 10px}
+.project-name{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:2px}
+.project-meta{font-size:11px;color:var(--t2);margin-bottom:10px;line-height:1.5}
+.project-footer{
+  display:flex;align-items:center;justify-content:space-between;
+  border-top:1px solid var(--b1);padding:8px 14px;
+}
+.project-labels{display:flex;gap:4px;flex-wrap:wrap}
+.label-chip{padding:2px 7px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.3px}
+
+/* ── TASKS TABLE (style CVAT) ── */
+.tasks-header{
+  display:flex;align-items:center;gap:10px;padding:12px 20px;
+  border-bottom:1px solid var(--b1);
+}
+.task-row{
+  background:var(--s1);border-bottom:1px solid var(--b1);
+  display:grid;grid-template-columns:auto 1fr auto;
+  cursor:pointer;transition:background .1s;
+}
+.task-row:hover{background:var(--s2)}
+.task-thumb{width:80px;height:60px;background:var(--s3);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.task-thumb i{font-size:24px;color:var(--t3)}
+.task-body{padding:10px 16px;display:flex;flex-direction:column;gap:4px}
+.task-name{font-size:13px;font-weight:600;color:var(--t1)}
+.task-submeta{font-size:11px;color:var(--t2)}
+.task-progress-row{display:flex;align-items:center;gap:8px;margin-top:4px}
+.prog-bar{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;flex:1;max-width:200px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:2px;transition:width .3s}
+.task-actions{padding:10px 16px;display:flex;align-items:center;gap:8px}
+
+/* ── JOBS TABLE (style CVAT exact) ── */
+.jobs-container{padding:0 20px 20px}
+.job-card{
+  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);
+  margin-bottom:8px;padding:14px 18px;transition:all .15s;
+}
+.job-card:hover{border-color:var(--b3)}
+.job-card.selected{border-color:var(--cyan);background:var(--cyan2)}
+.job-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.job-id{font-size:13px;font-weight:600;color:var(--cyan);cursor:pointer}
+.job-id:hover{text-decoration:underline}
+.job-meta{font-size:11px;color:var(--t2)}
+.job-body{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:16px;align-items:center}
+.job-field label{font-size:10px;color:var(--t2);display:block;margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase}
+.job-select{
+  background:var(--s2);border:1px solid var(--b2);color:var(--t1);
+  font-family:var(--font);font-size:12px;padding:5px 10px;border-radius:var(--r);
+  cursor:pointer;width:100%;
+}
+.job-select:focus{outline:none;border-color:var(--cyan)}
+.job-stats{text-align:right;font-size:11px;color:var(--t2);line-height:1.8}
+.job-stats b{color:var(--t1);font-family:var(--mono)}
+.job-stats .done{color:var(--green)}
+.job-stats .review{color:var(--purple)}
+.job-stats .progress{color:var(--amber)}
+
+/* ── STATUS TAGS ── */
+.status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.status::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.s-new{background:var(--s3);color:var(--t2)}.s-new::before{background:var(--t2)}
+.s-progress{background:var(--amber2);color:var(--amber)}.s-progress::before{background:var(--amber)}
+.s-review{background:var(--purple2);color:var(--purple)}.s-review::before{background:var(--purple)}
+.s-done{background:var(--green2);color:var(--green)}.s-done::before{background:var(--green)}
+.s-reject{background:var(--red2);color:var(--red)}.s-reject::before{background:var(--red)}
+
+/* ── STAGE TAGS ── */
+.stage{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.3px}
+.stage-ann{background:rgba(0,212,255,.15);color:var(--cyan)}
+.stage-acc{background:rgba(0,230,118,.15);color:var(--green)}
+.stage-rev{background:rgba(124,107,255,.15);color:var(--purple)}
+
+/* ── ANNOTATEUR ── */
+#ann-page{display:none;flex:1;flex-direction:column;min-height:0}
+#ann-header{
+  height:42px;background:var(--s1);border-bottom:1px solid var(--b1);
+  display:flex;align-items:center;gap:10px;padding:0 14px;flex-shrink:0;
+}
+#ann-view{flex:1;position:relative;min-height:0;overflow:hidden}
+
+/* ── MODAL ── */
+#modal-bg{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center}
+#modal-bg.open{display:flex}
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:10px;width:500px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+.modal-hdr{padding:18px 22px 14px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:14px;font-weight:600}
+.modal-x{cursor:pointer;color:var(--t2);font-size:16px}
+.modal-x:hover{color:var(--t1)}
+.modal-body{padding:18px 22px}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--b1);display:flex;justify-content:flex-end;gap:8px}
+.form-g{margin-bottom:14px}
+.form-l{font-size:10px;color:var(--t2);margin-bottom:5px;display:block;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.form-i,.form-s,.form-ta{width:100%;background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-family:var(--font);font-size:12px;padding:8px 11px;border-radius:var(--r);transition:border-color .12s}
+.form-i:focus,.form-s:focus,.form-ta:focus{outline:none;border-color:var(--cyan)}
+.form-ta{resize:vertical;min-height:70px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+/* ── DROP ZONE ── */
+.drop-zone{border:2px dashed var(--b2);border-radius:var(--r2);padding:28px;text-align:center;cursor:pointer;transition:all .2s}
+.drop-zone:hover,.drop-zone.over{border-color:var(--cyan);background:var(--cyan2)}
+.drop-zone i{font-size:30px;color:var(--t3);margin-bottom:10px;display:block}
+.drop-zone p{color:var(--t2);font-size:12px}
+.drop-zone small{color:var(--t3);font-size:10px;margin-top:4px;display:block}
+
+/* ── REALTIME INDICATOR ── */
+#rt-status{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--t2)}
+.rt-dot{width:6px;height:6px;border-radius:50%;background:var(--t3)}
+.rt-dot.online{background:var(--green);animation:pulse-dot 2s infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── TOAST ── */
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:9px 18px;border-radius:var(--r);font-size:12px;font-weight:600;z-index:999;display:none;pointer-events:none;white-space:nowrap}
+
+/* ── EMPTY ── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;text-align:center}
+.empty i{font-size:40px;color:var(--t3);margin-bottom:14px}
+.empty h3{font-size:14px;font-weight:600;color:var(--t2);margin-bottom:6px}
+.empty p{font-size:12px;color:var(--t3);max-width:260px;line-height:1.6}
+
+/* ── LABEL COLOR SWATCHES ── */
+.color-swatches{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.swatch{width:22px;height:22px;border-radius:4px;cursor:pointer;border:2px solid transparent;transition:border-color .1s}
+.swatch:hover,.swatch.sel{border-color:#fff}
+
+/* ── ONLINE USERS ── */
+.online-users{display:flex;margin-left:8px}
+.online-users .avatar{margin-left:-6px;border:2px solid var(--s1);width:24px;height:24px;font-size:9px;position:relative}
+.online-users .avatar:first-child{margin-left:0}
+.online-dot{position:absolute;bottom:0;right:0;width:7px;height:7px;background:var(--green);border-radius:50%;border:1.5px solid var(--s1)}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">⬡</div>
+      <span class="login-logo-text">LiDAR<span>Annotate</span></span>
+    </div>
+    <label class="login-label">Nom d'utilisateur</label>
+    <input class="login-input" id="login-name" placeholder="ex: arthur" maxlength="20" autocomplete="off">
+    <label class="login-label">Rôle</label>
+    <select class="login-input" id="login-role" style="cursor:pointer">
+      <option value="annotator">Annotateur</option>
+      <option value="reviewer">Relecteur</option>
+      <option value="admin">Administrateur</option>
+    </select>
+    <button class="login-btn" onclick="doLogin()">Connexion</button>
+    <div class="login-err" id="login-err"></div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b1);font-size:10px;color:var(--t3);text-align:center">
+      Les données sont synchronisées en temps réel avec votre équipe via Supabase
+    </div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app" style="display:none">
+
+  <!-- TOPBAR -->
+  <div id="topbar">
+    <div class="tb-logo" onclick="nav('projects')">
+      <div class="tb-logo-icon">⬡</div>
+      <span class="tb-logo-text">LiDAR<span>Annotate</span></span>
+    </div>
+    <nav class="tb-nav">
+      <a onclick="nav('dashboard')" data-page="dashboard"><i class="ti ti-layout-dashboard"></i> Dashboard</a>
+      <a onclick="nav('projects')" data-page="projects"><i class="ti ti-layout-grid"></i> Projets</a>
+      <a onclick="nav('tasks')"    data-page="tasks"   ><i class="ti ti-list-check"></i> Tâches</a>
+      <a onclick="nav('jobs')"     data-page="jobs"    ><i class="ti ti-briefcase"></i> Jobs</a>
+    </nav>
+    <div class="tb-right">
+      <div id="rt-status"><div class="rt-dot" id="rt-dot"></div><span id="rt-label">Connexion...</span></div>
+      <div class="online-users" id="online-users"></div>
+      <div class="tb-user" id="tb-user-btn">
+        <div class="avatar" id="user-avatar">?</div>
+        <span style="font-size:12px;color:var(--t2)" id="user-name-display">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BREADCRUMB -->
+  <div id="breadcrumb"></div>
+
+  <!-- MAIN CONTENT -->
+  <div id="main">
+    <div id="content">
+
+      <!-- ── PROJECTS PAGE ── -->
+      <div id="page-projects" class="page" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title">Projets</span>
+          <div class="search-box"><i class="ti ti-search"></i><input placeholder="Rechercher..." id="search-projects" oninput="renderProjects()"></div>
+          <div class="toolbar-sep"></div>
+          <button class="btn btn-primary btn-sm" onclick="openNewProjectModal()"><i class="ti ti-plus"></i> Nouveau projet</button>
+        </div>
+        <div class="projects-grid" id="projects-grid"></div>
+      </div>
+
+      <!-- ── TASKS PAGE ── -->
+      <div id="page-tasks" class="page" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title" id="tasks-title">Tâches</span>
+          <div class="search-box"><i class="ti ti-search"></i><input placeholder="Rechercher..." id="search-tasks" oninput="renderTasks()"></div>
+          <div style="display:flex;gap:6px" id="task-filter-btns">
+            <button class="btn btn-ghost btn-sm active-filter" onclick="setTaskFilter('all',this)">Toutes</button>
+            <button class="btn btn-ghost btn-sm" onclick="setTaskFilter('annotation',this)">Annotation</button>
+            <button class="btn btn-ghost btn-sm" onclick="setTaskFilter('review',this)">Revue</button>
+          </div>
+          <div class="toolbar-sep"></div>
+          <button class="btn btn-ghost btn-sm" onclick="openImportModal()"><i class="ti ti-upload"></i> Importer</button>
+          <button class="btn btn-primary btn-sm" onclick="openNewTaskModal()"><i class="ti ti-plus"></i> Nouvelle tâche</button>
+        </div>
+        <div id="tasks-list"></div>
+      </div>
+
+      <!-- ── JOBS PAGE ── -->
+      <div id="page-jobs" class="page" style="display:none">
+        <div class="toolbar">
+          <span class="toolbar-title" id="jobs-title">Jobs</span>
+          <div class="toolbar-sep"></div>
+          <button class="btn btn-primary btn-sm" onclick="openNewJobModal()"><i class="ti ti-plus"></i> Nouveau job</button>
+        </div>
+        <div class="jobs-container" id="jobs-list"></div>
+      </div>
+
+    </div>
+
+    <!-- ── ANNOTATEUR ── -->
+    <div id="ann-page">
+      <div id="ann-header">
+        <button class="btn btn-ghost btn-sm" onclick="closeAnnotator()"><i class="ti ti-arrow-left"></i> Retour</button>
+        <span style="font-size:12px;color:var(--t2)" id="ann-job-label">—</span>
+        <span id="ann-save-badge" style="display:none;font-size:10px;color:var(--green);gap:4px;align-items:center"><i class="ti ti-check"></i> Sauvegardé</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn btn-ghost btn-sm" onclick="setJobState('in progress')"><i class="ti ti-pencil"></i> En cours</button>
+          <button class="btn btn-ghost btn-sm" onclick="setJobState('on review')" style="color:var(--purple);border-color:rgba(124,107,255,.3)"><i class="ti ti-eye"></i> En revue</button>
+          <button class="btn btn-primary btn-sm" onclick="setJobState('completed')"><i class="ti ti-check"></i> Terminé</button>
+        </div>
+      </div>
+      <div id="ann-view"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ══ -->
+<div id="modal-bg" onclick="closeModal(event)">
+  <div class="modal" id="modal-box">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modal-title"></span>
+      <span class="modal-x" onclick="closeModal()">✕</span>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot" id="modal-foot"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<input type="file" id="fi-import" multiple accept=".pcd,.xyz,.txt,.json,.zip" style="display:none">
+
+<script>
+// ════════════════════════════════════════════════════════
+// CONFIG SUPABASE — remplacer avec vos valeurs
+// ════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://kuyuzuqhauhfgmgiqfqd.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eXV6dXFoYXVoZmdtZ2lxZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTg0MzksImV4cCI6MjA5NjY3NDQzOX0.1fjIUAWlgdv-y4gxeSWvK9FARzxoRFNxQct6_BgBLbs';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════
+let ME = null; // utilisateur courant
+let currentPage = 'projects';
+let currentProjectId = null;
+let currentTaskId = null;
+let currentJobId = null;
+let taskFilter = 'all';
+let onlineUsers = {};
+
+// Cache local
+let PROJECTS = [];
+let TASKS = [];
+let JOBS = [];
+
+// ════════════════════════════════════════════════════════
+// LOGIN
+// ════════════════════════════════════════════════════════
+async function doLogin() {
+  const name = document.getElementById('login-name').value.trim().toLowerCase();
+  const role = document.getElementById('login-role').value;
+  const err  = document.getElementById('login-err');
+  if(!name) { err.textContent = 'Entrez un nom d\'utilisateur'; return; }
+  if(name.length < 2) { err.textContent = 'Minimum 2 caractères'; return; }
+
+  err.textContent = '';
+  ME = { name, role, initials: name.slice(0,2).toUpperCase(), color: userColor(name) };
+
+  // Enregistrer la présence
+  await db.from('presence').upsert({ username: name, role, last_seen: new Date().toISOString() });
+
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+
+  document.getElementById('user-avatar').textContent = ME.initials;
+  document.getElementById('user-avatar').style.background = ME.color;
+  document.getElementById('user-name-display').textContent = ME.name;
+
+  await initApp();
+}
+
+document.getElementById('login-name').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+function userColor(name) {
+  const colors = ['linear-gradient(135deg,#00d4ff,#7c6bff)','linear-gradient(135deg,#00e676,#00d4ff)','linear-gradient(135deg,#ffb300,#ff6b35)','linear-gradient(135deg,#ff4444,#ff6bff)','linear-gradient(135deg,#7c6bff,#ff6bff)'];
+  let h = 0; for(const c of name) h = (h*31 + c.charCodeAt(0)) % colors.length;
+  return colors[h];
+}
+
+// ════════════════════════════════════════════════════════
+// INIT & REALTIME
+// ════════════════════════════════════════════════════════
+async function initApp() {
+  await loadAll();
+  subscribeRealtime();
+  subscribePresence();
+  setRTStatus(true);
+  nav('dashboard');
+}
+
+async function loadAll() {
+  const [{ data: projects }, { data: tasks }, { data: jobs }] = await Promise.all([
+    db.from('projects').select('*').order('created_at', {ascending:false}),
+    db.from('tasks').select('*').order('created_at', {ascending:false}),
+    db.from('jobs').select('*').order('created_at', {ascending:false}),
+  ]);
+  PROJECTS = projects || [];
+  TASKS    = tasks    || [];
+  JOBS     = jobs     || [];
+}
+
+async function subscribeRealtime() {
+  db.channel('db-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'projects'}, async () => { const {data} = await db.from('projects').select('*').order('created_at',{ascending:false}); PROJECTS=data||[]; if(currentPage==='projects') renderProjects(); })
+    .on('postgres_changes', {event:'*', schema:'public', table:'tasks'},    async () => { const {data} = await db.from('tasks').select('*').order('created_at',{ascending:false}); TASKS=data||[]; if(currentPage==='tasks') renderTasks(); })
+    .on('postgres_changes', {event:'*', schema:'public', table:'jobs'},     async () => { const {data} = await db.from('jobs').select('*').order('created_at',{ascending:false}); JOBS=data||[]; if(currentPage==='jobs') renderJobs(); })
+    .subscribe(status => setRTStatus(status === 'SUBSCRIBED'));
+}
+
+async function subscribePresence() {
+  const channel = db.channel('presence-'+Date.now());
+  channel.on('presence', {event:'sync'}, () => {
+    const state = channel.presenceState();
+    onlineUsers = {};
+    Object.values(state).forEach(users => users.forEach(u => { onlineUsers[u.username] = u; }));
+    renderOnlineUsers();
+  }).subscribe(async status => {
+    if(status === 'SUBSCRIBED') {
+      await channel.track({ username: ME.name, role: ME.role, online_at: new Date().toISOString() });
+    }
+  });
+  // Ping toutes les 30s
+  setInterval(async () => {
+    await db.from('presence').upsert({ username: ME.name, role: ME.role, last_seen: new Date().toISOString() });
+  }, 30000);
+}
+
+function setRTStatus(online) {
+  document.getElementById('rt-dot').className = 'rt-dot' + (online?' online':'');
+  document.getElementById('rt-label').textContent = online ? 'En ligne' : 'Hors ligne';
+}
+
+function renderOnlineUsers() {
+  const el = document.getElementById('online-users');
+  const users = Object.values(onlineUsers).filter(u => u.username !== ME.name).slice(0,5);
+  el.innerHTML = users.map(u => `<div class="avatar" style="background:${userColor(u.username)}" title="${u.username}"><span class="online-dot"></span>${u.username.slice(0,2).toUpperCase()}</div>`).join('');
+}
+
+// ════════════════════════════════════════════════════════
+// NAVIGATION
+// ════════════════════════════════════════════════════════
+function nav(page, projectId=null, taskId=null) {
+  // Fermer l'annotateur si ouvert
+  document.getElementById('ann-page').style.display = 'none';
+  document.getElementById('main').querySelector('#content').style.display = '';
+
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.tb-nav a').forEach(a => a.classList.remove('active'));
+  document.querySelector(`.tb-nav a[data-page="${page}"]`)?.classList.add('active');
+
+  const pageEl = document.getElementById('page-'+page);
+  if(pageEl) pageEl.style.display = 'block';
+  currentPage = page;
+
+  if(projectId) currentProjectId = projectId;
+  if(taskId) currentTaskId = taskId;
+
+  renderBreadcrumb();
+
+  if(page==='dashboard') renderDashboard();
+  if(page==='projects') renderProjects();
+  if(page==='tasks')    renderTasks();
+  if(page==='jobs')     renderJobs();
+}
+
+function renderBreadcrumb() {
+  const bc = document.getElementById('breadcrumb');
+  const parts = [];
+  parts.push(`<span class="bc-link" onclick="nav('projects')"><i class="ti ti-home" style="font-size:13px"></i></span>`);
+
+  if(currentPage !== 'projects') {
+    if(currentProjectId) {
+      const p = PROJECTS.find(p=>p.id===currentProjectId);
+      if(p) parts.push(`<span class="bc-sep">/</span><span class="bc-link" onclick="nav('tasks','${p.id}')">${p.name}</span>`);
+    }
+    if(currentPage === 'jobs' && currentTaskId) {
+      const t = TASKS.find(t=>t.id===currentTaskId);
+      if(t) parts.push(`<span class="bc-sep">/</span><span class="bc-link" onclick="nav('jobs',null,'${t.id}')">${t.name}</span>`);
+    }
+  }
+
+  bc.innerHTML = parts.join('');
+}
+
+// ════════════════════════════════════════════════════════
+// PROJECTS
+// ════════════════════════════════════════════════════════
+const LABEL_COLORS = ['#00d4ff','#7c6bff','#00e676','#ffb300','#ff4444','#ff6bff','#ff9f43','#54a0ff'];
+
+function renderDashboard() {
+  const h = new Date().getHours();
+  const greet = h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';
+  const g = document.getElementById('dash-greeting');
+  if(g) g.textContent = greet+', '+ME.name+' 👋';
+
+  const totalJobs   = JOBS.length;
+  const newJobs     = JOBS.filter(j=>j.state==='new').length;
+  const inProg      = JOBS.filter(j=>j.state==='in progress').length;
+  const review      = JOBS.filter(j=>j.stage==='review').length;
+  const done        = JOBS.filter(j=>j.state==='completed').length;
+  const totalCubs   = JOBS.reduce((s,j)=>s+(j.cuboids||0),0);
+  const pct         = totalJobs ? Math.round(done/totalJobs*100) : 0;
+
+  const stats = [
+    {v:PROJECTS.length, l:'Projets',   c:'var(--cyan)'},
+    {v:TASKS.length,    l:'Tâches',    c:'var(--purple)'},
+    {v:totalJobs,       l:'Jobs total',c:'var(--text)'},
+    {v:done,            l:'Complétés', c:'var(--green)'},
+    {v:inProg,          l:'En cours',  c:'var(--amber)'},
+    {v:review,          l:'En revue',  c:'var(--purple)'},
+    {v:pct+'%',         l:'Completion',c:'var(--cyan)'},
+    {v:totalCubs,       l:'Cuboïdes',  c:'var(--green)'},
+  ];
+  const sg = document.getElementById('dash-stats');
+  if(sg) sg.innerHTML = stats.map(s=>`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+      <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${s.c};line-height:1;margin-bottom:4px">${s.v}</div>
+      <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">${s.l}</div>
+    </div>`).join('');
+
+  // Jobs récents
+  const rj = document.getElementById('dash-recent-jobs');
+  if(rj) {
+    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6);
+    rj.innerHTML = recent.length ? recent.map(j=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('jobs',null,'${j.id}')">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${j.frame_count} frames · ${j.cuboids||0} cuboïdes</div>
+        </div>
+        <span class="badge ${j.state==='completed'?'badge-green':j.state==='in progress'?'badge-amber':'badge-grey'}">${j.state}</span>
+      </div>`).join('') : '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucun job</div>';
+  }
+
+  // Activité récente (jobs mis à jour récemment)
+  const da = document.getElementById('dash-activity');
+  if(da) {
+    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,5);
+    da.innerHTML = recent.map(j => {
+      const task = TASKS.find(t=>t.id===j.task_id);
+      const proj = PROJECTS.find(p=>p.id===task?.project_id);
+      const stateColor = j.state==='completed'?'var(--green)':j.state==='in progress'?'var(--amber)':'var(--text2)';
+      return `<div style="display:flex;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:6px;height:6px;border-radius:50%;background:${stateColor};flex-shrink:0;margin-top:4px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--text)">${j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${proj?.name||'—'} · ${j.cuboids||0} cuboïdes · ${j.state}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text2);white-space:nowrap">${timeAgo(j.updated_at)}</div>
+      </div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucune activité</div>';
+  }
+
+  // Présence
+  const dp = document.getElementById('dash-presence');
+  if(dp) {
+    dp.innerHTML = '<div style="padding:10px 18px 6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">En ligne</div>' +
+      (window.ONLINE_USERS||[]).map(u=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 18px">
+          <div class="avatar" style="background:${userColor(u.username)};width:24px;height:24px;font-size:10px">${u.username.slice(0,2).toUpperCase()}</div>
+          <span style="font-size:12px;color:var(--text)">${u.username}</span>
+          <span style="font-size:10px;color:var(--text2);margin-left:auto">${u.role}</span>
+        </div>`).join('') || '<div style="padding:8px 18px;font-size:11px;color:var(--text2)">Vous êtes seul(e) en ligne</div>';
+  }
+}
+
+function renderProjects() {
+  const q = document.getElementById('search-projects')?.value?.toLowerCase() || '';
+  const filtered = PROJECTS.filter(p => !q || p.name.toLowerCase().includes(q));
+  const grid = document.getElementById('projects-grid');
+
+  if(!filtered.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:span 4"><i class="ti ti-folder"></i><h3>Aucun projet</h3><p>Créez votre premier projet pour organiser les annotations</p><button class="btn btn-primary" style="margin-top:14px" onclick="openNewProjectModal()"><i class="ti ti-plus"></i> Créer un projet</button></div>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(p => {
+    const tasks  = TASKS.filter(t=>t.project_id===p.id);
+    const jobs   = JOBS.filter(j=>tasks.find(t=>t.id===j.task_id));
+    const done   = jobs.filter(j=>j.state==='completed').length;
+    const pct    = jobs.length ? Math.round(done/jobs.length*100) : 0;
+    const labels = (p.labels||[]).slice(0,4);
+
+    return `<div class="project-card" onclick="nav('tasks','${p.id}')">
+      <div class="project-thumb">
+        <i class="ti ti-3d-cube-sphere project-thumb-icon"></i>
+        <div class="project-thumb-badge">${jobs.length} jobs</div>
+      </div>
+      <div class="project-info">
+        <div class="project-name">${p.name}</div>
+        <div class="project-meta">Créé par ${p.created_by}<br>Mis à jour ${timeAgo(p.updated_at||p.created_at)}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div class="prog-bar" style="max-width:none;flex:1"><div class="prog-fill" style="width:${pct}%"></div></div>
+          <span style="font-size:10px;color:var(--t2);font-family:var(--mono)">${done}/${jobs.length} done</span>
+        </div>
+      </div>
+      <div class="project-footer">
+        <div class="project-labels">${labels.map(l=>`<span class="label-chip" style="background:${l.color}22;color:${l.color}">${l.name}</span>`).join('')}</div>
+        <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="editProject('${p.id}')"><i class="ti ti-pencil"></i></button>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="deleteProject('${p.id}')"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openNewProjectModal() {
+  const swatches = LABEL_COLORS.map((c,i)=>`<div class="swatch" style="background:${c}" data-color="${c}" onclick="selectLabelColor(this)"></div>`).join('');
+  openModal('Nouveau projet', `
+    <div class="form-g"><label class="form-l">Nom du projet</label><input class="form-i" id="np-name" placeholder="Ex: Mission ETRV 2026" autofocus></div>
+    <div class="form-g"><label class="form-l">Description</label><textarea class="form-ta" id="np-desc" placeholder="Description..."></textarea></div>
+    <div class="form-g">
+      <label class="form-l">Labels</label>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input class="form-i" id="np-label-name" placeholder="Nom du label" style="flex:1">
+        <div class="color-swatches" style="margin:0">${swatches}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="addLabelToNew()"><i class="ti ti-plus"></i> Ajouter label</button>
+      <div id="np-labels-list" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:5px"></div>
+    </div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createProject()"><i class="ti ti-plus"></i> Créer</button>`);
+  window._npLabels = [];
+  window._npLabelColor = LABEL_COLORS[0];
+  document.querySelector('.swatch').classList.add('sel');
+  document.getElementById('np-name').addEventListener('keydown', e => { if(e.key==='Enter') createProject(); });
+}
+
+function selectLabelColor(el) {
+  document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('sel'));
+  el.classList.add('sel');
+  window._npLabelColor = el.dataset.color;
+}
+
+function addLabelToNew() {
+  const name = document.getElementById('np-label-name').value.trim();
+  if(!name) return;
+  window._npLabels.push({name, color: window._npLabelColor});
+  document.getElementById('np-label-name').value = '';
+  document.getElementById('np-labels-list').innerHTML = window._npLabels.map((l,i)=>
+    `<span class="label-chip" style="background:${l.color}22;color:${l.color};cursor:pointer" onclick="window._npLabels.splice(${i},1);addLabelToNew()">${l.name} ✕</span>`
+  ).join('');
+}
+
+async function createProject() {
+  const name = document.getElementById('np-name').value.trim();
+  if(!name) return;
+  const { error } = await db.from('projects').insert({
+    name, description: document.getElementById('np-desc').value.trim(),
+    labels: window._npLabels || [],
+    created_by: ME.name,
+    updated_at: new Date().toISOString(),
+  });
+  if(error) { toast('Erreur: '+error.message, '#ff4444'); return; }
+  closeModal(); toast('Projet créé ✓', '#00d4ff');
+}
+
+async function deleteProject(id) {
+  if(!confirm('Supprimer ce projet et toutes ses tâches ?')) return;
+  await db.from('jobs').delete().in('task_id', TASKS.filter(t=>t.project_id===id).map(t=>t.id));
+  await db.from('tasks').delete().eq('project_id', id);
+  await db.from('projects').delete().eq('id', id);
+  toast('Projet supprimé', '#ffb300');
+}
+
+// ════════════════════════════════════════════════════════
+// TASKS
+// ════════════════════════════════════════════════════════
+function renderTasks() {
+  const q = document.getElementById('search-tasks')?.value?.toLowerCase() || '';
+  let filtered = TASKS;
+  if(currentProjectId) filtered = filtered.filter(t=>t.project_id===currentProjectId);
+  if(q) filtered = filtered.filter(t=>t.name.toLowerCase().includes(q));
+
+  const project = PROJECTS.find(p=>p.id===currentProjectId);
+  document.getElementById('tasks-title').textContent = project ? project.name : 'Toutes les tâches';
+
+  const list = document.getElementById('tasks-list');
+  if(!filtered.length) {
+    list.innerHTML = `<div class="empty"><i class="ti ti-list-check"></i><h3>Aucune tâche</h3><p>Importez des frames PCD pour commencer</p><button class="btn btn-primary" style="margin-top:14px" onclick="openImportModal()"><i class="ti ti-upload"></i> Importer</button></div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(t => {
+    const jobs   = JOBS.filter(j=>j.task_id===t.id);
+    const done   = jobs.filter(j=>j.state==='completed').length;
+    const review = jobs.filter(j=>j.state==='on review').length;
+    const inprog = jobs.filter(j=>j.state==='in progress').length;
+    const pct    = jobs.length ? Math.round(done/jobs.length*100) : 0;
+    return `
+    <div class="task-row" onclick="openTask('${t.id}')">
+      <div class="task-thumb"><i class="ti ti-3d-cube-sphere"></i></div>
+      <div class="task-body">
+        <div class="task-name">#${t.id?.slice(-4)||'???'}: ${t.name}</div>
+        <div class="task-submeta">Créé par ${t.created_by} · ${timeAgo(t.created_at)}</div>
+        <div class="task-progress-row">
+          ${done?`<span style="font-size:10px;color:var(--green)">• ${done} terminé</span>`:''}
+          ${review?`<span style="font-size:10px;color:var(--purple)">• ${review} en revue</span>`:''}
+          ${inprog?`<span style="font-size:10px;color:var(--amber)">• ${inprog} en cours</span>`:''}
+          <span style="font-size:10px;color:var(--t2)">• ${jobs.length} total</span>
+          <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
+        </div>
+      </div>
+      <div class="task-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-primary btn-sm" onclick="openTask('${t.id}')"><i class="ti ti-external-link"></i> Ouvrir</button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTask('${t.id}')"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openTask(taskId) {
+  currentTaskId = taskId;
+  nav('jobs', currentProjectId, taskId);
+}
+
+function setTaskFilter(f, btn) {
+  taskFilter = f;
+  document.querySelectorAll('#task-filter-btns .btn').forEach(b=>b.classList.remove('active-filter'));
+  btn?.classList.add('active-filter');
+  renderTasks();
+}
+
+async function deleteTask(id) {
+  if(!confirm('Supprimer cette tâche et ses jobs ?')) return;
+  await db.from('jobs').delete().eq('task_id', id);
+  await db.from('tasks').delete().eq('id', id);
+  toast('Tâche supprimée', '#ffb300');
+}
+
+// ════════════════════════════════════════════════════════
+// JOBS
+// ════════════════════════════════════════════════════════
+async function renderJobs() {
+  const task = TASKS.find(t=>t.id===currentTaskId);
+  document.getElementById('jobs-title').textContent = task ? task.name : 'Jobs';
+
+  const jobs = JOBS.filter(j=>j.task_id===currentTaskId);
+  const list = document.getElementById('jobs-list');
+
+  if(!jobs.length) {
+    list.innerHTML = `<div class="empty"><i class="ti ti-briefcase"></i><h3>Aucun job</h3><p>Créez des jobs pour découper la tâche en portions assignables</p><button class="btn btn-primary" style="margin-top:14px" onclick="openNewJobModal()"><i class="ti ti-plus"></i> Créer un job</button></div>`;
+    return;
+  }
+
+  // Regrouper les jobs avec infos frames
+  const members = await getMembers();
+  list.innerHTML = jobs.map(j => {
+    const stateClass = {new:'s-new','in progress':'s-progress','on review':'s-review',completed:'s-done',rejected:'s-reject'}[j.state]||'s-new';
+    const stageClass = {annotation:'stage-ann',review:'stage-rev',acceptance:'stage-acc'}[j.stage]||'stage-ann';
+    const cuboids = j.cuboids || 0;
+    return `
+    <div class="job-card" id="jc-${j.id}">
+      <div class="job-header">
+        <span class="job-id" onclick="openAnnotator('${j.id}')">Job #${j.id?.slice(-6)||'???'}</span>
+        <span class="stage ${stageClass}">${j.stage||'annotation'}</span>
+        <span class="status ${stateClass}">${j.state||'new'}</span>
+        <span class="job-meta">Créé ${timeAgo(j.created_at)} · mis à jour ${timeAgo(j.updated_at||j.created_at)}</span>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn btn-primary btn-sm" onclick="openAnnotator('${j.id}')"><i class="ti ti-pencil"></i> Annoter</button>
+          <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteJob('${j.id}')"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+      <div class="job-body">
+        <div class="job-field">
+          <label>Assigné à</label>
+          <select class="job-select" onchange="updateJobField('${j.id}','assignee',this.value)">
+            <option value="">— Sélectionner —</option>
+            ${(members).map(m=>`<option value="${m.username}" ${j.assignee===m.username?'selected':''}>${m.username} (${m.role})</option>`).join('')}
+          </select>
+        </div>
+        <div class="job-field">
+          <label>Stage</label>
+          <select class="job-select" onchange="updateJobField('${j.id}','stage',this.value)">
+            <option value="annotation" ${j.stage==='annotation'?'selected':''}>annotation</option>
+            <option value="review"     ${j.stage==='review'    ?'selected':''}>review</option>
+            <option value="acceptance" ${j.stage==='acceptance'?'selected':''}>acceptance</option>
+          </select>
+        </div>
+        <div class="job-field">
+          <label>State</label>
+          <select class="job-select" onchange="updateJobField('${j.id}','state',this.value)">
+            <option value="new"         ${j.state==='new'        ?'selected':''}>new</option>
+            <option value="in progress" ${j.state==='in progress'?'selected':''}>in progress</option>
+            <option value="on review"   ${j.state==='on review'  ?'selected':''}>on review</option>
+            <option value="completed"   ${j.state==='completed'  ?'selected':''}>completed</option>
+            <option value="rejected"    ${j.state==='rejected'   ?'selected':''}>rejected</option>
+          </select>
+        </div>
+        <div class="job-stats">
+          <div>Frames: <b>${j.frame_count||0}</b></div>
+          <div>Range: <b>${j.frame_range||'—'}</b></div>
+          <div>Cuboïdes: <b style="color:var(--cyan)">${cuboids}</b></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function getMembers() {
+  const { data } = await db.from('presence').select('*').order('last_seen', {ascending:false});
+  return data || [];
+}
+
+async function updateJobField(id, field, value) {
+  await db.from('jobs').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+  const j = JOBS.find(j=>j.id===id); if(j) j[field]=value;
+  toast('Mis à jour ✓', '#00d4ff');
+}
+
+async function deleteJob(id) {
+  if(!confirm('Supprimer ce job ?')) return;
+  await db.from('jobs').delete().eq('id', id);
+  toast('Job supprimé', '#ffb300');
+}
+
+// ════════════════════════════════════════════════════════
+// NEW TASK + IMPORT
+// ════════════════════════════════════════════════════════
+function openNewTaskModal() {
+  const projs = PROJECTS.map(p=>`<option value="${p.id}" ${p.id===currentProjectId?'selected':''}>${p.name}</option>`).join('');
+  openModal('Nouvelle tâche', `
+    <div class="form-g"><label class="form-l">Nom</label><input class="form-i" id="nt-name" placeholder="Ex: Mission_2026_batch1" autofocus></div>
+    <div class="form-g"><label class="form-l">Projet</label><select class="form-s" id="nt-proj">${projs}</select></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createTask()">Créer</button>`);
+}
+
+async function createTask() {
+  const name = document.getElementById('nt-name').value.trim();
+  const pid  = document.getElementById('nt-proj').value;
+  if(!name) return;
+  const { data: task, error } = await db.from('tasks').insert({
+    name, project_id: pid||null, created_by: ME.name,
+    updated_at: new Date().toISOString()
+  }).select().single();
+  if(error) { toast('Erreur: '+error.message,'#ff4444'); return; }
+  closeModal();
+  currentTaskId = task.id;
+  nav('jobs', pid||currentProjectId, task.id);
+  toast('Tâche créée ✓', '#00d4ff');
+}
+
+async function openImportModal() {
+  const projs = PROJECTS.map(p=>`<option value="${p.id}" ${p.id===currentProjectId?'selected':''}>${p.name}</option>`).join('');
+  openModal('Importer des frames', `
+    <div class="form-g"><label class="form-l">Projet</label><select class="form-s" id="imp-proj"><option value="">— Aucun —</option>${projs}</select></div>
+    <div class="form-g"><label class="form-l">Nom de la tâche</label><input class="form-i" id="imp-task-name" placeholder="Laisser vide = nom du fichier ZIP"></div>
+    <div class="drop-zone" id="imp-drop" onclick="document.getElementById('fi-import').click()">
+      <i class="ti ti-file-3d"></i>
+      <p>Cliquer ou glisser vos fichiers PCD / ZIP Supervisely</p>
+      <small>.pcd · .xyz · .txt · .json · .zip (Supervisely / CVAT)</small>
+    </div>
+    <div id="imp-preview" style="margin-top:8px;font-size:11px;color:var(--t2)"></div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" id="imp-btn" onclick="doImport()" disabled>Importer</button>`);
+
+  document.getElementById('fi-import').onchange = e => {
+    window._impFiles = [...e.target.files];
+    document.getElementById('imp-preview').textContent = window._impFiles.length + ' fichier(s) : ' + window._impFiles.map(f=>f.name).join(', ');
+    document.getElementById('imp-btn').disabled = false;
+    e.target.value = '';
+  };
+}
+
+async function doImport() {
+  const files = window._impFiles || [];
+  if(!files.length) { toast('Aucun fichier sélectionné','#ff4444'); return; }
+  const pid      = document.getElementById('imp-proj').value || null;
+  const taskName = document.getElementById('imp-task-name').value.trim();
+  let totalJobs  = 0;
+  let totalFrames = 0;
+
+  for(const file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    let frames = [];
+    let annData = {};
+
+    // ── Parser le ZIP Supervisely ──
+    if(ext === 'zip') {
+      if(typeof JSZip === 'undefined'){ toast('JSZip non chargé','#ff4444'); return; }
+      toast('Lecture du ZIP...', '#ffb300');
+      const buf = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(buf);
+      const annFiles = Object.keys(zip.files)
+        .filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'))
+        .sort();
+      console.log('ZIP frames found:', annFiles.length);
+      for(const af of annFiles) {
+        const fname = af.replace('ds0/ann/','').replace('.pcd.json','');
+        const ann   = JSON.parse(await zip.file(af).async('string'));
+        frames.push(fname);
+        annData[fname] = ann;
+      }
+    } else {
+      // Fichier PCD/JSON unique
+      frames = [file.name.replace(/\.[^.]+$/,'')];
+    }
+
+    if(!frames.length) { toast('Aucune frame trouvée dans ' + file.name, '#ff4444'); continue; }
+    totalFrames += frames.length;
+    console.log('Creating task with', frames.length, 'frames');
+
+    // ── Créer la tâche ──
+    const tName = taskName || file.name.replace(/\.[^.]+$/,'');
+    const { data: task, error: te } = await db.from('tasks').insert({
+      name: tName,
+      project_id: pid || null,
+      created_by: ME.name,
+      frame_count: frames.length,
+      updated_at: new Date().toISOString()
+    }).select().single();
+
+    if(te) {
+      console.error('Task insert error:', te);
+      toast('Erreur création tâche: ' + te.message, '#ff4444');
+      continue;
+    }
+    console.log('Task created:', task.id);
+
+    // ── Créer les jobs par chunks de 500 ──
+    const CHUNK = 500;
+    for(let i = 0; i < frames.length; i += CHUNK) {
+      const chunk    = frames.slice(i, i + CHUNK);
+      const cuboids  = chunk.reduce((s,n) => s + (annData[n]?.figures?.length || 0), 0);
+
+      // Stocker ann_data uniquement si assez petit (< 400KB)
+      const fullAnn   = Object.fromEntries(chunk.map(n => [n, annData[n]||null]).filter(([,v])=>v));
+      const annStr    = JSON.stringify(fullAnn);
+      const annPayload = annStr.length < 400000 ? fullAnn : {};
+      if(annStr.length >= 400000) {
+        console.warn('ann_data too large (' + Math.round(annStr.length/1024) + 'KB), storing empty');
+      }
+
+      const jobPayload = {
+        task_id:     task.id,
+        frame_range: chunk[0] + (chunk.length > 1 ? ' — ' + chunk[chunk.length-1] : ''),
+        frame_count: chunk.length,
+        frame_names: chunk,
+        ann_data:    annPayload,
+        stage:       cuboids > 0 ? 'review' : 'annotation',
+        state:       cuboids > 0 ? 'in progress' : 'new',
+        cuboids,
+        created_by:  ME.name,
+        updated_at:  new Date().toISOString(),
+      };
+
+      console.log('Inserting job:', jobPayload.frame_range, 'cuboids:', cuboids);
+      const { data: jobData, error: je } = await db.from('jobs').insert(jobPayload).select().single();
+      if(je) {
+        console.error('Job insert error:', je);
+        toast('Erreur job: ' + je.message, '#ff4444');
+      } else {
+        console.log('Job created:', jobData.id);
+        totalJobs++;
+      }
+    }
+  }
+
+  closeModal();
+  currentTaskId = null;
+  await loadAll();
+  nav('jobs');
+  toast(totalJobs + ' job(s) créé(s) pour ' + totalFrames + ' frames ✓', '#00e676');
+}
+
+function openNewJobModal() {
+  openModal('Nouveau job', `
+    <div class="form-g"><label class="form-l">Plage de frames</label><input class="form-i" id="nj-range" placeholder="Ex: 0002307 — 0002400"></div>
+    <div class="form-g"><label class="form-l">Nombre de frames</label><input class="form-i" id="nj-count" type="number" placeholder="50"></div>
+    <div class="form-row">
+      <div class="form-g"><label class="form-l">Stage</label><select class="form-s" id="nj-stage"><option value="annotation">annotation</option><option value="review">review</option><option value="acceptance">acceptance</option></select></div>
+      <div class="form-g"><label class="form-l">State</label><select class="form-s" id="nj-state"><option value="new">new</option><option value="in progress">in progress</option></select></div>
+    </div>
+  `, `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createJob()">Créer</button>`);
+}
+
+async function createJob() {
+  const { error } = await db.from('jobs').insert({
+    task_id: currentTaskId,
+    frame_range: document.getElementById('nj-range').value.trim(),
+    frame_count: +document.getElementById('nj-count').value||0,
+    stage: document.getElementById('nj-stage').value,
+    state: document.getElementById('nj-state').value,
+    cuboids: 0,
+    created_by: ME.name,
+    updated_at: new Date().toISOString(),
+  });
+  if(error) { toast('Erreur: '+error.message,'#ff4444'); return; }
+  closeModal(); toast('Job créé ✓', '#00d4ff');
+}
+
+// ════════════════════════════════════════════════════════
+// ANNOTATEUR
+// ════════════════════════════════════════════════════════
+currentJobId = null;
+let annSaveTimer = null;
+
+async function openAnnotator(jobId) {
+  currentJobId = jobId;
+  const job = JOBS.find(j=>j.id===jobId);
+
+  document.getElementById('ann-job-label').textContent = job
+    ? 'Job #'+job.id.slice(-6) + ' · ' + (job.frame_range||'') + ' · ' + job.frame_count + ' frames'
+    : jobId;
+
+  document.getElementById('ann-page').style.display = 'flex';
+  document.getElementById('ann-page').style.flexDirection = 'column';
+  document.getElementById('main').querySelector('#content').style.display = 'none';
+
+  const view = document.getElementById('ann-view');
+  view.dataset.job = jobId;
+
+  // Ouvrir l'annotateur en iframe avec les params Supabase dans l'URL
+  const annUrl = 'annotator.html'
+    + '?job='  + encodeURIComponent(jobId)
+    + '&url='  + encodeURIComponent(SUPABASE_URL)
+    + '&key='  + encodeURIComponent(SUPABASE_KEY)
+    + '&user=' + encodeURIComponent(ME.name);
+
+  view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
+
+  // Mettre à jour le statut
+  if(job && job.state === 'new') {
+    updateJobField(jobId, 'state', 'in progress');
+  }
+}
+function openAnnotatorWindow(jobId) {
+  // Passer le jobId dans l'URL pour que l'annotateur puisse récupérer les données
+  const url = 'annotator.html?job=' + jobId + '&url=' + encodeURIComponent(SUPABASE_URL) + '&key=' + encodeURIComponent(SUPABASE_KEY) + '&user=' + ME.name;
+  window.open(url, '_blank', 'width=1400,height=900');
+}
+
+function closeAnnotator() {
+  document.getElementById('ann-page').style.display = 'none';
+  document.getElementById('main').querySelector('#content').style.display = '';
+  if(currentJobId) nav('jobs', currentProjectId, currentTaskId);
+}
+
+async function setJobState(state) {
+  if(!currentJobId) return;
+  await updateJobField(currentJobId, 'state', state);
+  toast('Statut: ' + state + ' ✓', '#00e676');
+  if(state === 'completed') { closeAnnotator(); }
+}
+
+// ════════════════════════════════════════════════════════
+// MODAL
+// ════════════════════════════════════════════════════════
+function openModal(title, body, foot='') {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-foot').innerHTML = foot;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeModal(e) {
+  if(e && e.target !== document.getElementById('modal-bg')) return;
+  document.getElementById('modal-bg').classList.remove('open');
+}
+
+// ════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════
+function timeAgo(iso) {
+  if(!iso) return '—';
+  const d = (Date.now() - new Date(iso).getTime()) / 1000;
+  if(d < 60) return 'à l\'instant';
+  if(d < 3600) return 'il y a '+Math.floor(d/60)+'min';
+  if(d < 86400) return 'il y a '+Math.floor(d/3600)+'h';
+  if(d < 604800) return 'il y a '+Math.floor(d/86400)+'j';
+  return new Date(iso).toLocaleDateString('fr');
+}
+
+let _toastTimer;
+function toast(msg, color='#00d4ff') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.cssText = `display:block;background:${color};color:${['#00d4ff','#00e676','#ffb300'].includes(color)?'#000':'#fff'};padding:9px 18px;border-radius:5px;font-size:12px;font-weight:600;z-index:999;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);opacity:1;transition:opacity .3s`;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>t.style.opacity='0', 2400);
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') {
+    closeModal();
+    if(document.getElementById('ann-page').style.display !== 'none') closeAnnotator();
+  }
+});
+</script>
+</body>
+</html><div class="page" id="page-dashboard" style="display:none">
+  <div class="dash-header">
+    <h2 id="dash-greeting" style="font-size:18px;font-weight:600;color:var(--text)">Bonjour 👋</h2>
+    <p style="font-size:12px;color:var(--text2);margin-top:2px">Vue d'ensemble de vos annotations LiDAR</p>
+  </div>
+  <div class="stats-grid" id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Jobs récents</span></div>
+      <div id="dash-recent-jobs"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Activité &amp; Présence</span></div>
+      <div id="dash-presence"></div>
+      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px" id="dash-activity"></div>
+    </div>
+  </div>
+</div>
+
+
