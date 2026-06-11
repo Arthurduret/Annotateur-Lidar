@@ -2792,6 +2792,112 @@ function resize() {
 }
 new ResizeObserver(resize).observe(canvas);
 setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
+
+// ── Lecture des paramètres URL (mode embarqué dans la plateforme) ──
+(async function checkURLParams() {
+  const params = new URLSearchParams(window.location.search);
+  const jobId  = params.get('job');
+  const sbUrl  = params.get('url');
+  const sbKey  = params.get('key');
+  const user   = params.get('user');
+
+  if(!jobId || !sbUrl || !sbKey) return; // mode standalone normal
+
+  // Afficher un bandeau "mode plateforme"
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;height:32px;background:var(--panel);border-bottom:1px solid var(--border2);display:flex;align-items:center;padding:0 14px;gap:10px;z-index:200;font-size:11px;color:var(--text2)';
+  banner.innerHTML = '<span style="color:var(--cyan);font-weight:600">⬡ LiDAR Annotate</span><span>Job #' + jobId.slice(-6) + '</span><span style="margin-left:auto;color:var(--text3)">Connecté en tant que ' + (user||'?') + '</span>';
+  document.body.prepend(banner);
+  document.getElementById('app').style.marginTop = '32px';
+
+  // Charger Supabase JS si pas déjà présent
+  if(!window.supabase) {
+    await new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      s.onload = resolve;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Connexion Supabase
+  const { createClient } = window.supabase;
+  const db = createClient(sbUrl, sbKey);
+
+  // Charger le job
+  const { data: job, error } = await db.from('jobs').select('*').eq('id', jobId).single();
+  if(error || !job) {
+    toast('Erreur chargement job: ' + (error?.message||'introuvable'), 'var(--red)');
+    return;
+  }
+
+  // Charger les frames du job
+  const frameNames = job.frame_names || [];
+  if(!frameNames.length) {
+    toast('Ce job ne contient aucune frame', 'var(--amber)');
+    return;
+  }
+
+  toast('Job #' + jobId.slice(-6) + ' — ' + frameNames.length + ' frames', 'var(--cyan)');
+
+  // Créer les frames dans S.frames depuis les ann_data du job
+  const annData = job.ann_data || {};
+  const framesToAdd = frameNames.map(name => ({
+    name,
+    raw: null,
+    pts: null,
+    imap: null,
+    cuboids: annData[name]?.figures?.map(fig => {
+      const obj = annData[name]?.objects?.find(o => o.key === fig.objectKey);
+      const g = fig.geometry;
+      return {
+        pos: g.position,
+        rot: g.rotation,
+        dim: g.dimensions,
+        classTitle: obj?.classTitle || 'Cable Electrique',
+        name: obj?.classTitle || 'Cable Electrique',
+        color: CLASS_TYPES.find(t => t.type === obj?.classTitle)?.color || '#ff9f43',
+        npts: 0,
+      };
+    }) || [],
+    undoStack: [], redoStack: []
+  }));
+
+  S.frames = framesToAdd;
+  buildFrameSelect();
+
+  // Sauvegarder vers Supabase quand on génère des cuboïdes
+  const origGenCuboids = window.genCuboids;
+  window._supabase_db = db;
+  window._supabase_jobId = jobId;
+
+  // Surcharger le bouton export pour sauvegarder dans Supabase
+  const expBtn = document.getElementById('btn-exp-sly');
+  if(expBtn) {
+    expBtn.textContent = '↑ Sauvegarder dans CVAT';
+    expBtn.onclick = async function() {
+      // Sauvegarder les cuboïdes dans le job Supabase
+      const updAnn = {};
+      S.frames.forEach(fr => {
+        if(fr.cuboids && fr.cuboids.length) updAnn[fr.name] = { figures: fr.cuboids };
+      });
+      const totalCubs = S.frames.reduce((s,f)=>s+(f.cuboids?.length||0),0);
+      const { error: ue } = await db.from('jobs').update({
+        ann_data: updAnn,
+        cuboids: totalCubs,
+        state: 'in progress',
+        updated_at: new Date().toISOString()
+      }).eq('id', jobId);
+      if(ue) toast('Erreur sauvegarde: ' + ue.message, 'var(--red)');
+      else   toast('Sauvegardé dans Supabase ✓ — ' + totalCubs + ' cuboïdes', 'var(--green)');
+    };
+  }
+
+  if(frameNames.length > 0) {
+    hideOverlay();
+    toast('Job chargé — importe les PCD correspondants pour annoter', 'var(--amber)');
+  }
+})();
 requestAnimationFrame(()=>resize());
 (function loop(){requestAnimationFrame(loop);renderer.render(scene,camera);})();
 </script>
