@@ -358,6 +358,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
             <button class="btn btn-ghost btn-sm" onclick="setTaskFilter('review',this)">Revue</button>
           </div>
           <div class="toolbar-sep"></div>
+          <button class="btn btn-ghost btn-sm" onclick="openMergeTasksModal()"><i class="ti ti-git-merge"></i> Regrouper en tâche</button>
           <button class="btn btn-ghost btn-sm" onclick="openImportModal()"><i class="ti ti-upload"></i> Importer</button>
           <button class="btn btn-primary btn-sm" onclick="openNewTaskModal()"><i class="ti ti-plus"></i> Nouvelle tâche</button>
         </div>
@@ -836,6 +837,120 @@ async function deleteTask(id) {
   await db.from('jobs').delete().eq('task_id', id);
   await db.from('tasks').delete().eq('id', id);
   toast('Tâche supprimée', '#ffb300');
+}
+
+// ── Regrouper toutes les tâches du projet en une seule tâche avec jobs de N frames ──
+function openMergeTasksModal() {
+  const tasks = currentProjectId ? TASKS.filter(t=>t.project_id===currentProjectId) : TASKS;
+  if(tasks.length < 2) { toast('Il faut au moins 2 tâches à regrouper', '#ffb300'); return; }
+
+  // Collecter toutes les frames de toutes les tâches
+  const allFrames = [];
+  for(const t of tasks) {
+    const jobs = JOBS.filter(j=>j.task_id===t.id);
+    for(const j of jobs) {
+      for(const fn of (j.frame_names||[])) {
+        allFrames.push({ name: fn, prefix: j.storage_prefix });
+      }
+    }
+  }
+  allFrames.sort((a,b)=>a.name.localeCompare(b.name));
+
+  openModal('Regrouper en une tâche', `
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.6">
+      <b style="color:var(--cyan)">${tasks.length} tâches</b> trouvées avec
+      <b style="color:var(--cyan)">${allFrames.length} frames</b> au total.<br>
+      Elles vont être regroupées en <b style="color:var(--t1)">une seule tâche</b> avec des jobs automatiques.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Nom de la nouvelle tâche</label>
+        <input class="form-i" id="merge-name" type="text" placeholder="ex: Vol la Fare" style="width:100%" value="">
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1">
+          <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Frames par job</label>
+          <input class="form-i" id="merge-chunk" type="number" value="50" min="1" max="500" style="width:100%">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Jobs créés</label>
+          <div style="font-size:18px;font-weight:700;color:var(--cyan);font-family:var(--mono)">${Math.ceil(allFrames.length/50)}</div>
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--t2)">
+        <input type="checkbox" id="merge-delete" checked style="accent-color:var(--cyan)">
+        Supprimer les anciennes tâches après regroupement
+      </label>
+    </div>
+  `, `
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-primary btn-sm" onclick="doMergeTasks()"><i class="ti ti-git-merge"></i> Regrouper</button>
+  `);
+
+  // Stocker les données pour doMergeTasks
+  window._mergeData = { tasks, allFrames };
+}
+
+async function doMergeTasks() {
+  const name  = document.getElementById('merge-name')?.value?.trim();
+  const chunk = parseInt(document.getElementById('merge-chunk')?.value) || 50;
+  const doDelete = document.getElementById('merge-delete')?.checked ?? true;
+  if(!name) { toast('Donne un nom à la tâche', '#ff4444'); return; }
+
+  const { tasks, allFrames } = window._mergeData || {};
+  if(!allFrames?.length) { closeModal(); return; }
+
+  const btn = document.querySelector('#modal-footer .btn-primary');
+  if(btn) { btn.disabled = true; btn.textContent = 'Regroupement...'; }
+
+  // 1. Créer la nouvelle tâche
+  const { data: newTask, error: te } = await db.from('tasks').insert({
+    name,
+    project_id:  currentProjectId || tasks[0]?.project_id || null,
+    frame_count: allFrames.length,
+    stage:       'annotation',
+    created_by:  ME.name,
+    updated_at:  new Date().toISOString(),
+  }).select().single();
+
+  if(te || !newTask) { toast('Erreur création tâche: '+(te?.message||'?'), '#ff4444'); if(btn){btn.disabled=false;btn.textContent='Regrouper';} return; }
+
+  // 2. Créer les jobs par chunks — réutiliser le storage_prefix d'origine
+  let jobsCreated = 0;
+  for(let i = 0; i < allFrames.length; i += chunk) {
+    const chunkFrames = allFrames.slice(i, i + chunk);
+    const frameNames  = chunkFrames.map(f=>f.name);
+    // Préfixe = celui du 1er frame du chunk (tous dans le même projet normalement)
+    const prefix = chunkFrames[0]?.prefix || null;
+
+    const { error: je } = await db.from('jobs').insert({
+      task_id:        newTask.id,
+      frame_names:    frameNames,
+      frame_count:    frameNames.length,
+      frame_range:    frameNames[0] + (frameNames.length>1 ? ' — '+frameNames[frameNames.length-1] : ''),
+      storage_prefix: prefix,
+      pcd_uploaded:   !!prefix,
+      stage:          'annotation',
+      state:          'new',
+      cuboids:        0,
+      created_by:     ME.name,
+      updated_at:     new Date().toISOString(),
+    });
+    if(!je) jobsCreated++;
+  }
+
+  // 3. Supprimer les anciennes tâches si demandé
+  if(doDelete) {
+    for(const t of tasks) {
+      await db.from('jobs').delete().eq('task_id', t.id);
+      await db.from('tasks').delete().eq('id', t.id);
+    }
+  }
+
+  await loadAll();
+  closeModal();
+  toast(`✓ "${name}" créée — ${jobsCreated} job(s) de ~${chunk} frames`, '#00e676');
+  renderTasks();
 }
 
 // ════════════════════════════════════════════════════════
