@@ -1171,8 +1171,13 @@ async function createTask() {
       if(lbl) lbl.textContent = `Job ${jobsCreated+1} — Upload ${totalUploaded+1}/${files.length}: ${file.name}`;
       if(bar) bar.style.width = Math.round((totalUploaded / files.length) * 95) + '%';
       const { error } = await db.storage.from('lidar-files').upload(prefix + file.name, file, { upsert: true });
-      if(error) console.warn('Upload warning:', file.name, error.message);
-      else uploaded++;
+      if(error) {
+        if(lbl) lbl.textContent = `❌ Erreur: ${error.message}`;
+        toast('Erreur upload: ' + error.message, '#ff4444');
+        if(btn) btn.disabled = false;
+        return;
+      }
+      uploaded++;
       totalUploaded++;
     }
 
