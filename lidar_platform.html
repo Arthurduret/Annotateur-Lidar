@@ -336,6 +336,47 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
   <div id="main">
     <div id="content">
 
+      <!-- ── DASHBOARD PAGE ── -->
+      <div id="page-dashboard" class="page" style="display:none;padding:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div>
+            <h2 id="dash-greeting" style="font-size:20px;font-weight:700;color:var(--t1);margin:0">Bonjour 👋</h2>
+            <p style="font-size:12px;color:var(--t2);margin:4px 0 0">Vue d'ensemble de vos annotations LiDAR</p>
+          </div>
+        </div>
+        <!-- Stats -->
+        <div id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px"></div>
+        <!-- Barre de progression globale -->
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:16px 20px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <span style="font-size:13px;font-weight:600;color:var(--t1)">Progression globale</span>
+            <span id="dash-pct" style="font-size:13px;font-weight:700;color:var(--cyan);font-family:var(--mono)">0%</span>
+          </div>
+          <div style="height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
+            <div id="dash-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:4px;transition:width .4s;width:0%"></div>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:10px" id="dash-progress-labels"></div>
+        </div>
+        <!-- Grille: Jobs récents + Activité -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px">
+              <i class="ti ti-briefcase" style="color:var(--cyan)"></i>
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">Jobs récents</span>
+            </div>
+            <div id="dash-recent-jobs"></div>
+          </div>
+          <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px">
+              <i class="ti ti-users" style="color:var(--purple)"></i>
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">Annotateurs en ligne</span>
+            </div>
+            <div id="dash-presence"></div>
+            <div style="border-top:1px solid var(--b1)" id="dash-activity"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ── PROJECTS PAGE ── -->
       <div id="page-projects" class="page" style="display:none">
         <div class="toolbar">
@@ -585,76 +626,102 @@ function renderDashboard() {
   const h = new Date().getHours();
   const greet = h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';
   const g = document.getElementById('dash-greeting');
-  if(g) g.textContent = greet+', '+ME.name+' 👋';
+  if(g) g.textContent = greet + ', ' + ME.name + ' 👋';
 
-  const totalJobs   = JOBS.length;
-  const newJobs     = JOBS.filter(j=>j.state==='new').length;
-  const inProg      = JOBS.filter(j=>j.state==='in progress').length;
-  const review      = JOBS.filter(j=>j.stage==='review').length;
-  const done        = JOBS.filter(j=>j.state==='completed').length;
-  const totalCubs   = JOBS.reduce((s,j)=>s+(j.cuboids||0),0);
-  const pct         = totalJobs ? Math.round(done/totalJobs*100) : 0;
+  const totalJobs  = JOBS.length;
+  const newJobs    = JOBS.filter(j=>j.state==='new').length;
+  const inProg     = JOBS.filter(j=>j.state==='in progress').length;
+  const inReview   = JOBS.filter(j=>j.state==='on review').length;
+  const done       = JOBS.filter(j=>j.state==='completed').length;
+  const totalFrames= JOBS.reduce((s,j)=>s+(j.frame_count||0),0);
+  const totalCubs  = JOBS.reduce((s,j)=>s+(j.cuboids||0),0);
+  const pct        = totalJobs ? Math.round(done/totalJobs*100) : 0;
 
-  const stats = [
-    {v:PROJECTS.length, l:'Projets',   c:'var(--cyan)'},
-    {v:TASKS.length,    l:'Tâches',    c:'var(--purple)'},
-    {v:totalJobs,       l:'Jobs total',c:'var(--text)'},
-    {v:done,            l:'Complétés', c:'var(--green)'},
-    {v:inProg,          l:'En cours',  c:'var(--amber)'},
-    {v:review,          l:'En revue',  c:'var(--purple)'},
-    {v:pct+'%',         l:'Completion',c:'var(--cyan)'},
-    {v:totalCubs,       l:'Cuboïdes',  c:'var(--green)'},
-  ];
+  // Stats cards
   const sg = document.getElementById('dash-stats');
-  if(sg) sg.innerHTML = stats.map(s=>`
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
-      <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${s.c};line-height:1;margin-bottom:4px">${s.v}</div>
-      <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">${s.l}</div>
+  if(sg) sg.innerHTML = [
+    {v:PROJECTS.length, l:'Projets',      c:'var(--cyan)',   i:'ti-layout-grid'},
+    {v:TASKS.length,    l:'Tâches',       c:'var(--purple)', i:'ti-list-check'},
+    {v:totalJobs,       l:'Jobs',         c:'var(--t1)',     i:'ti-briefcase'},
+    {v:totalFrames,     l:'Frames total', c:'var(--t2)',     i:'ti-stack'},
+    {v:done,            l:'Terminés',     c:'var(--green)',  i:'ti-circle-check'},
+    {v:inProg,          l:'En cours',     c:'var(--amber)',  i:'ti-progress'},
+    {v:inReview,        l:'En revue',     c:'var(--purple)', i:'ti-eye'},
+    {v:totalCubs,       l:'Cuboïdes',     c:'var(--cyan)',   i:'ti-box'},
+  ].map(s=>`
+    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:16px 18px;display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--t2)">${s.l}</span>
+        <i class="ti ${s.i}" style="font-size:14px;color:${s.c};opacity:.6"></i>
+      </div>
+      <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:${s.c};line-height:1">${s.v}</div>
     </div>`).join('');
+
+  // Barre de progression globale
+  const pb = document.getElementById('dash-progress-bar');
+  const pp = document.getElementById('dash-pct');
+  if(pb) pb.style.width = pct + '%';
+  if(pp) pp.textContent = pct + '%';
+  const pl = document.getElementById('dash-progress-labels');
+  if(pl) pl.innerHTML = [
+    {v:newJobs,  l:'Nouveau',   c:'var(--t2)'},
+    {v:inProg,   l:'En cours',  c:'var(--amber)'},
+    {v:inReview, l:'En revue',  c:'var(--purple)'},
+    {v:done,     l:'Terminé',   c:'var(--green)'},
+  ].map(x=>`<span style="font-size:10px;color:${x.c}">● ${x.v} ${x.l}</span>`).join('');
 
   // Jobs récents
   const rj = document.getElementById('dash-recent-jobs');
   if(rj) {
-    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6);
-    rj.innerHTML = recent.length ? recent.map(j=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('jobs',null,'${j.id}')">
+    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,8);
+    rj.innerHTML = recent.length ? recent.map(j=>{
+      const task = TASKS.find(t=>t.id===j.task_id);
+      const sc = {new:'var(--t2)','in progress':'var(--amber)','on review':'var(--purple)',completed:'var(--green)'}[j.state]||'var(--t2)';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--b1);cursor:pointer" onclick="openTask('${j.task_id}')">
+        <div style="width:7px;height:7px;border-radius:50%;background:${sc};flex-shrink:0"></div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.frame_range||j.id.slice(0,8)}</div>
-          <div style="font-size:10px;color:var(--text2)">${j.frame_count} frames · ${j.cuboids||0} cuboïdes</div>
+          <div style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.name||j.frame_range||'Job'}</div>
+          <div style="font-size:10px;color:var(--t2)">${task?.name||'—'} · ${j.frame_count||0} frames · ${j.cuboids||0} cuboïdes</div>
         </div>
-        <span class="badge ${j.state==='completed'?'badge-green':j.state==='in progress'?'badge-amber':'badge-grey'}">${j.state}</span>
-      </div>`).join('') : '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucun job</div>';
+        <span style="font-size:10px;color:${sc};white-space:nowrap">${j.state}</span>
+      </div>`;
+    }).join('') : '<div style="padding:24px;text-align:center;font-size:12px;color:var(--t2)">Aucun job</div>';
   }
 
-  // Activité récente (jobs mis à jour récemment)
+  // Présence + Activité récente
+  const dp = document.getElementById('dash-presence');
+  if(dp) {
+    const users = window.ONLINE_USERS||[];
+    dp.innerHTML = users.length
+      ? users.map(u=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--b1)">
+            <div class="avatar" style="background:${userColor(u.username)};width:26px;height:26px;font-size:10px">${u.username.slice(0,2).toUpperCase()}</div>
+            <span style="font-size:12px;color:var(--t1)">${u.username}</span>
+            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);margin-left:auto"></div>
+          </div>`).join('')
+      : '<div style="padding:16px;font-size:11px;color:var(--t2);text-align:center">Vous êtes seul(e) en ligne</div>';
+  }
+
   const da = document.getElementById('dash-activity');
   if(da) {
     const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,5);
-    da.innerHTML = recent.map(j => {
-      const task = TASKS.find(t=>t.id===j.task_id);
-      const proj = PROJECTS.find(p=>p.id===task?.project_id);
-      const stateColor = j.state==='completed'?'var(--green)':j.state==='in progress'?'var(--amber)':'var(--text2)';
-      return `<div style="display:flex;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border)">
-        <div style="width:6px;height:6px;border-radius:50%;background:${stateColor};flex-shrink:0;margin-top:4px"></div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;color:var(--text)">${j.frame_range||j.id.slice(0,8)}</div>
-          <div style="font-size:10px;color:var(--text2)">${proj?.name||'—'} · ${j.cuboids||0} cuboïdes · ${j.state}</div>
-        </div>
-        <div style="font-size:10px;color:var(--text2);white-space:nowrap">${timeAgo(j.updated_at)}</div>
-      </div>`;
-    }).join('') || '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucune activité</div>';
-  }
-
-  // Présence
-  const dp = document.getElementById('dash-presence');
-  if(dp) {
-    dp.innerHTML = '<div style="padding:10px 18px 6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">En ligne</div>' +
-      (window.ONLINE_USERS||[]).map(u=>`
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 18px">
-          <div class="avatar" style="background:${userColor(u.username)};width:24px;height:24px;font-size:10px">${u.username.slice(0,2).toUpperCase()}</div>
-          <span style="font-size:12px;color:var(--text)">${u.username}</span>
-          <span style="font-size:10px;color:var(--text2);margin-left:auto">${u.role}</span>
-        </div>`).join('') || '<div style="padding:8px 18px;font-size:11px;color:var(--text2)">Vous êtes seul(e) en ligne</div>';
+    if(recent.length) {
+      da.innerHTML = '<div style="padding:10px 16px 6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--t2)">Activité récente</div>' +
+        recent.map(j=>{
+          const task = TASKS.find(t=>t.id===j.task_id);
+          const sc = {new:'var(--t2)','in progress':'var(--amber)','on review':'var(--purple)',completed:'var(--green)'}[j.state]||'var(--t2)';
+          return `<div style="display:flex;gap:10px;padding:8px 16px;border-top:1px solid var(--b1)">
+            <div style="width:6px;height:6px;border-radius:50%;background:${sc};flex-shrink:0;margin-top:4px"></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;color:var(--t1)">${j.name||j.frame_range||'Job'}</div>
+              <div style="font-size:10px;color:var(--t2)">${task?.name||'—'} · ${j.cuboids||0} cuboïdes</div>
+            </div>
+            <div style="font-size:10px;color:var(--t3);white-space:nowrap">${timeAgo(j.updated_at)}</div>
+          </div>`;
+        }).join('');
+    } else {
+      da.innerHTML = '';
+    }
   }
 }
 
@@ -978,7 +1045,7 @@ async function renderJobs() {
     return `
     <div class="job-card" id="jc-${j.id}">
       <div class="job-header">
-        <span class="job-id">#${j.id?.slice(-6)||'???'}</span>
+        <span class="job-id">${j.name||'Job #'+j.id?.slice(-4)}</span>
         <span class="stage ${stageClass}">${j.stage||'annotation'}</span>
         <span class="status ${stateClass}">${j.state||'new'}</span>
         <span class="job-meta">${j.frame_count||0} frames · ${j.frame_range||'—'}</span>
@@ -1146,13 +1213,16 @@ async function createTask() {
   const frameNames = files.map(f => f.name.replace(/\.[^.]+$/, ''));
   let jobsCreated = 0, totalUploaded = 0;
 
+  const existingJobCount = JOBS.filter(j=>j.task_id===task.id).length;
   for(let i = 0; i < frameNames.length; i += chunk) {
     const chunkFrames = frameNames.slice(i, i + chunk);
     const chunkFiles  = files.slice(i, i + chunk);
+    const jobNum = existingJobCount + jobsCreated + 1;
 
     // Créer le job d'abord pour obtenir son ID
     const { data: job, error: je } = await db.from('jobs').insert({
       task_id:        task.id,
+      name:           'Job ' + jobNum,
       frame_names:    chunkFrames,
       frame_count:    chunkFrames.length,
       frame_range:    chunkFrames[0] + (chunkFrames.length>1 ? ' — '+chunkFrames[chunkFrames.length-1] : ''),
@@ -1545,17 +1615,20 @@ async function doUploadToTask(taskId, projectId) {
   let totalUploaded = 0;
 
   // ── Créer les jobs PAR CHUNK, uploader dans le dossier propre à chaque job ──
+  const existingCount = JOBS.filter(j=>j.task_id===taskId).length;
   for(let i = 0; i < frameNames.length; i += chunk) {
     const chunkFrames = frameNames.slice(i, i + chunk);
     const chunkFiles  = files.slice(i, i + chunk);
+    const jobNum = existingCount + jobsCreated + 1;
 
     // 1. Créer le job d'abord pour obtenir son ID
     const { data: job, error: je } = await db.from('jobs').insert({
       task_id:     taskId,
+      name:        'Job ' + jobNum,
       frame_names: chunkFrames,
       frame_count: chunkFrames.length,
       frame_range: chunkFrames[0] + (chunkFrames.length > 1 ? ' — ' + chunkFrames[chunkFrames.length-1] : ''),
-      storage_prefix: null, // sera mis à jour après upload
+      storage_prefix: null,
       pcd_uploaded: false,
       stage: 'annotation', state: 'new', cuboids: 0,
       created_by: ME.name, updated_at: new Date().toISOString(),
@@ -1700,21 +1773,4 @@ document.addEventListener('keydown', e => {
 });
 </script>
 </body>
-</html><div class="page" id="page-dashboard" style="display:none">
-  <div class="dash-header">
-    <h2 id="dash-greeting" style="font-size:18px;font-weight:600;color:var(--text)">Bonjour 👋</h2>
-    <p style="font-size:12px;color:var(--text2);margin-top:2px">Vue d'ensemble de vos annotations LiDAR</p>
-  </div>
-  <div class="stats-grid" id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Jobs récents</span></div>
-      <div id="dash-recent-jobs"></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Activité &amp; Présence</span></div>
-      <div id="dash-presence"></div>
-      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px" id="dash-activity"></div>
-    </div>
-  </div>
-</div>
+</html>
