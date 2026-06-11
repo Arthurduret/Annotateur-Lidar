@@ -203,12 +203,19 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 .stage-rev{background:rgba(124,107,255,.15);color:var(--purple)}
 
 /* ── ANNOTATEUR ── */
-#ann-page{display:none;flex:1;flex-direction:column;min-height:0}
+#ann-page{
+  display:none;position:fixed;inset:0;top:52px;
+  flex-direction:column;z-index:50;background:#07090f;
+}
 #ann-header{
   height:42px;background:var(--s1);border-bottom:1px solid var(--b1);
   display:flex;align-items:center;gap:10px;padding:0 14px;flex-shrink:0;
+  position:relative;z-index:51;
 }
-#ann-view{flex:1;position:relative;min-height:0;overflow:hidden}
+#ann-view{
+  flex:1;position:relative;overflow:hidden;
+  height:calc(100vh - 52px - 42px);
+}
 
 /* ── MODAL ── */
 #modal-bg{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center}
@@ -917,22 +924,57 @@ async function createTask() {
 async function openImportModal() {
   const projs = PROJECTS.map(p=>`<option value="${p.id}" ${p.id===currentProjectId?'selected':''}>${p.name}</option>`).join('');
   openModal('Importer des frames', `
-    <div class="form-g"><label class="form-l">Projet</label><select class="form-s" id="imp-proj"><option value="">— Aucun —</option>${projs}</select></div>
-    <div class="form-g"><label class="form-l">Nom de la tâche</label><input class="form-i" id="imp-task-name" placeholder="Laisser vide = nom du fichier ZIP"></div>
-    <div class="drop-zone" id="imp-drop" onclick="document.getElementById('fi-import').click()">
-      <i class="ti ti-file-3d"></i>
-      <p>Cliquer ou glisser vos fichiers PCD / ZIP Supervisely</p>
-      <small>.pcd · .xyz · .txt · .json · .zip (Supervisely / CVAT)</small>
+    <div class="form-group">
+      <label class="form-label">Projet</label>
+      <select class="form-input" id="imp-proj" style="cursor:pointer">
+        <option value="">— Sans projet —</option>${projs}
+      </select>
     </div>
-    <div id="imp-preview" style="margin-top:8px;font-size:11px;color:var(--t2)"></div>
-  `, `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" id="imp-btn" onclick="doImport()" disabled>Importer</button>`);
+    <div class="form-group">
+      <label class="form-label">Nom de la tâche</label>
+      <input class="form-input" id="imp-task-name" placeholder="Laisser vide = nom du fichier">
+    </div>
+    <div style="border:2px dashed var(--b2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s" id="imp-drop"
+         onclick="document.getElementById('imp-file').click()"
+         ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
+         ondragleave="this.style.borderColor='var(--b2)'"
+         ondrop="event.preventDefault();this.style.borderColor='var(--b2)';handleImpDrop(event)">
+      <div style="font-size:28px;margin-bottom:8px">📁</div>
+      <div style="font-size:13px;font-weight:500;color:var(--t1);margin-bottom:4px">Cliquer ou glisser les fichiers</div>
+      <div style="font-size:11px;color:var(--t2)">PCD / XYZ / TXT · ZIP Supervisely CVAT</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:6px">Les fichiers PCD seront stockés dans Supabase Storage</div>
+    </div>
+    <input type="file" id="imp-file" multiple accept=".pcd,.xyz,.txt,.json,.zip" style="display:none"
+           onchange="window._impFiles=[...this.files];updateImpPreview()">
+    <div id="imp-preview" style="margin-top:10px;font-size:11px;color:var(--t2)"></div>
+  `, `
+    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
+    <button class="btn btn-primary btn-sm" id="imp-btn" onclick="doImport()" disabled>
+      <i class="ti ti-upload"></i> Importer & Uploader
+    </button>
+  `);
+}
 
-  document.getElementById('fi-import').onchange = e => {
-    window._impFiles = [...e.target.files];
-    document.getElementById('imp-preview').textContent = window._impFiles.length + ' fichier(s) : ' + window._impFiles.map(f=>f.name).join(', ');
-    document.getElementById('imp-btn').disabled = false;
-    e.target.value = '';
-  };
+function handleImpDrop(e) {
+  window._impFiles = [...e.dataTransfer.files];
+  updateImpPreview();
+}
+
+function updateImpPreview() {
+  const files = window._impFiles || [];
+  const btn = document.getElementById('imp-btn');
+  if(btn) btn.disabled = !files.length;
+  const prev = document.getElementById('imp-preview');
+  if(!prev) return;
+  const pcd  = files.filter(f => ['pcd','xyz','txt'].includes(f.name.split('.').pop().toLowerCase()));
+  const zips = files.filter(f => f.name.endsWith('.zip'));
+  const parts = [];
+  if(zips.length)  parts.push(zips.length + ' ZIP Supervisely');
+  if(pcd.length)   parts.push(pcd.length  + ' fichier(s) PCD');
+  prev.innerHTML = files.length
+    ? `<div style="color:var(--cyan)">${parts.join(' · ')} sélectionné(s)</div>
+       <div style="color:var(--t3);margin-top:3px">${files.map(f=>f.name).slice(0,5).join(', ')}${files.length>5?' ...':''}</div>`
+    : '';
 }
 
 async function doImport() {
@@ -945,10 +987,11 @@ async function doImport() {
 
   for(const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
-    let frames = [];
+    let frames  = [];
     let annData = {};
+    let pcdFiles = {}; // frameName -> File object
 
-    // ── Parser le ZIP Supervisely ──
+    // ── Parser ZIP Supervisely ──
     if(ext === 'zip') {
       if(typeof JSZip === 'undefined'){ toast('JSZip non chargé','#ff4444'); return; }
       toast('Lecture du ZIP...', '#ffb300');
@@ -957,75 +1000,70 @@ async function doImport() {
       const annFiles = Object.keys(zip.files)
         .filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'))
         .sort();
-      console.log('ZIP frames found:', annFiles.length);
       for(const af of annFiles) {
         const fname = af.replace('ds0/ann/','').replace('.pcd.json','');
         const ann   = JSON.parse(await zip.file(af).async('string'));
         frames.push(fname);
         annData[fname] = ann;
       }
+    } else if(['pcd','xyz','txt'].includes(ext)) {
+      // Fichier PCD unique
+      const fname = file.name.replace(/\.[^.]+$/,'');
+      frames = [fname];
+      pcdFiles[fname] = file;
     } else {
-      // Fichier PCD/JSON unique
       frames = [file.name.replace(/\.[^.]+$/,'')];
     }
 
-    if(!frames.length) { toast('Aucune frame trouvée dans ' + file.name, '#ff4444'); continue; }
+    if(!frames.length) continue;
     totalFrames += frames.length;
-    console.log('Creating task with', frames.length, 'frames');
+
+    // ── Upload PCD vers Supabase Storage ──
+    const pcdFilesToUpload = Object.entries(pcdFiles);
+    if(pcdFilesToUpload.length > 0) {
+      toast('Upload PCD en cours (0/' + pcdFilesToUpload.length + ')...', '#ffb300');
+      let uploaded = 0;
+      for(const [fname, pcdFile] of pcdFilesToUpload) {
+        const storagePath = 'pcd/' + (pid||'shared') + '/' + fname + '.' + pcdFile.name.split('.').pop();
+        const { error: ue } = await db.storage.from('lidar-files').upload(storagePath, pcdFile, { upsert: true });
+        if(ue) console.warn('Upload warning:', ue.message);
+        else uploaded++;
+        toast('Upload PCD (' + uploaded + '/' + pcdFilesToUpload.length + ')...', '#ffb300');
+      }
+    }
 
     // ── Créer la tâche ──
     const tName = taskName || file.name.replace(/\.[^.]+$/,'');
     const { data: task, error: te } = await db.from('tasks').insert({
-      name: tName,
-      project_id: pid || null,
-      created_by: ME.name,
-      frame_count: frames.length,
-      updated_at: new Date().toISOString()
+      name: tName, project_id: pid || null, created_by: ME.name,
+      frame_count: frames.length, updated_at: new Date().toISOString()
     }).select().single();
-
-    if(te) {
-      console.error('Task insert error:', te);
-      toast('Erreur création tâche: ' + te.message, '#ff4444');
-      continue;
-    }
-    console.log('Task created:', task.id);
+    if(te) { toast('Erreur tâche: '+te.message,'#ff4444'); continue; }
 
     // ── Créer les jobs par chunks de 500 ──
     const CHUNK = 500;
     for(let i = 0; i < frames.length; i += CHUNK) {
-      const chunk    = frames.slice(i, i + CHUNK);
-      const cuboids  = chunk.reduce((s,n) => s + (annData[n]?.figures?.length || 0), 0);
-
-      // Stocker ann_data uniquement si assez petit (< 400KB)
-      const fullAnn   = Object.fromEntries(chunk.map(n => [n, annData[n]||null]).filter(([,v])=>v));
-      const annStr    = JSON.stringify(fullAnn);
+      const chunk   = frames.slice(i, i + CHUNK);
+      const cuboids = chunk.reduce((s,n) => s + (annData[n]?.figures?.length||0), 0);
+      const fullAnn = Object.fromEntries(chunk.map(n=>[n,annData[n]||null]).filter(([,v])=>v));
+      const annStr  = JSON.stringify(fullAnn);
       const annPayload = annStr.length < 400000 ? fullAnn : {};
-      if(annStr.length >= 400000) {
-        console.warn('ann_data too large (' + Math.round(annStr.length/1024) + 'KB), storing empty');
-      }
 
-      const jobPayload = {
+      const { data: jobData, error: je } = await db.from('jobs').insert({
         task_id:     task.id,
-        frame_range: chunk[0] + (chunk.length > 1 ? ' — ' + chunk[chunk.length-1] : ''),
+        frame_range: chunk[0] + (chunk.length>1?' — '+chunk[chunk.length-1]:''),
         frame_count: chunk.length,
         frame_names: chunk,
         ann_data:    annPayload,
-        stage:       cuboids > 0 ? 'review' : 'annotation',
-        state:       cuboids > 0 ? 'in progress' : 'new',
-        cuboids,
-        created_by:  ME.name,
-        updated_at:  new Date().toISOString(),
-      };
+        storage_prefix: 'pcd/' + (pid||'shared') + '/',
+        stage:   cuboids>0?'review':'annotation',
+        state:   cuboids>0?'in progress':'new',
+        cuboids, created_by: ME.name,
+        updated_at: new Date().toISOString(),
+      }).select().single();
 
-      console.log('Inserting job:', jobPayload.frame_range, 'cuboids:', cuboids);
-      const { data: jobData, error: je } = await db.from('jobs').insert(jobPayload).select().single();
-      if(je) {
-        console.error('Job insert error:', je);
-        toast('Erreur job: ' + je.message, '#ff4444');
-      } else {
-        console.log('Job created:', jobData.id);
-        totalJobs++;
-      }
+      if(je) { toast('Erreur job: '+je.message,'#ff4444'); console.error(je); }
+      else    { totalJobs++; }
     }
   }
 
@@ -1033,7 +1071,7 @@ async function doImport() {
   currentTaskId = null;
   await loadAll();
   nav('jobs');
-  toast(totalJobs + ' job(s) créé(s) pour ' + totalFrames + ' frames ✓', '#00e676');
+  toast(totalJobs+' job(s) créé(s) pour '+totalFrames+' frames ✓', '#00e676');
 }
 
 function openNewJobModal() {
@@ -1070,10 +1108,12 @@ let annSaveTimer = null;
 
 async function openAnnotator(jobId) {
   currentJobId = jobId;
-  const job = JOBS.find(j=>j.id===jobId);
+  const job  = JOBS.find(j=>j.id===jobId);
+  const task = job ? TASKS.find(t=>t.id===job.task_id) : null;
+  const proj = task ? PROJECTS.find(p=>p.id===task.project_id) : null;
 
   document.getElementById('ann-job-label').textContent = job
-    ? 'Job #'+job.id.slice(-6) + ' · ' + (job.frame_range||'') + ' · ' + job.frame_count + ' frames'
+    ? 'Job #'+job.id.slice(-6)+' · '+(job.frame_range||'')+' · '+job.frame_count+' frames'
     : jobId;
 
   document.getElementById('ann-page').style.display = 'flex';
@@ -1083,16 +1123,18 @@ async function openAnnotator(jobId) {
   const view = document.getElementById('ann-view');
   view.dataset.job = jobId;
 
-  // Ouvrir l'annotateur en iframe avec les params Supabase dans l'URL
+  // Passer toutes les infos nécessaires à l'annotateur via URL
+  const storagePrefix = job?.storage_prefix || ('pcd/' + (proj?.id||'shared') + '/');
   const annUrl = 'annotator.html'
-    + '?job='  + encodeURIComponent(jobId)
-    + '&url='  + encodeURIComponent(SUPABASE_URL)
-    + '&key='  + encodeURIComponent(SUPABASE_KEY)
-    + '&user=' + encodeURIComponent(ME.name);
+    + '?job='     + encodeURIComponent(jobId)
+    + '&url='     + encodeURIComponent(SUPABASE_URL)
+    + '&key='     + encodeURIComponent(SUPABASE_KEY)
+    + '&user='    + encodeURIComponent(ME.name)
+    + '&bucket='  + encodeURIComponent('lidar-files')
+    + '&prefix='  + encodeURIComponent(storagePrefix);
 
   view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
 
-  // Mettre à jour le statut
   if(job && job.state === 'new') {
     updateJobField(jobId, 'state', 'in progress');
   }
@@ -1179,5 +1221,3 @@ document.addEventListener('keydown', e => {
     </div>
   </div>
 </div>
-
-
