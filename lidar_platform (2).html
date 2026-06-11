@@ -296,6 +296,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
       <span class="tb-logo-text">LiDAR<span>Annotate</span></span>
     </div>
     <nav class="tb-nav">
+      <a onclick="nav('dashboard')" data-page="dashboard"><i class="ti ti-layout-dashboard"></i> Dashboard</a>
       <a onclick="nav('projects')" data-page="projects"><i class="ti ti-layout-grid"></i> Projets</a>
       <a onclick="nav('tasks')"    data-page="tasks"   ><i class="ti ti-list-check"></i> Tâches</a>
       <a onclick="nav('jobs')"     data-page="jobs"    ><i class="ti ti-briefcase"></i> Jobs</a>
@@ -458,7 +459,7 @@ async function initApp() {
   subscribeRealtime();
   subscribePresence();
   setRTStatus(true);
-  nav('projects');
+  nav('dashboard');
 }
 
 async function loadAll() {
@@ -530,6 +531,7 @@ function nav(page, projectId=null, taskId=null) {
 
   renderBreadcrumb();
 
+  if(page==='dashboard') renderDashboard();
   if(page==='projects') renderProjects();
   if(page==='tasks')    renderTasks();
   if(page==='jobs')     renderJobs();
@@ -558,6 +560,83 @@ function renderBreadcrumb() {
 // PROJECTS
 // ════════════════════════════════════════════════════════
 const LABEL_COLORS = ['#00d4ff','#7c6bff','#00e676','#ffb300','#ff4444','#ff6bff','#ff9f43','#54a0ff'];
+
+function renderDashboard() {
+  const h = new Date().getHours();
+  const greet = h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';
+  const g = document.getElementById('dash-greeting');
+  if(g) g.textContent = greet+', '+ME.name+' 👋';
+
+  const totalJobs   = JOBS.length;
+  const newJobs     = JOBS.filter(j=>j.state==='new').length;
+  const inProg      = JOBS.filter(j=>j.state==='in progress').length;
+  const review      = JOBS.filter(j=>j.stage==='review').length;
+  const done        = JOBS.filter(j=>j.state==='completed').length;
+  const totalCubs   = JOBS.reduce((s,j)=>s+(j.cuboids||0),0);
+  const pct         = totalJobs ? Math.round(done/totalJobs*100) : 0;
+
+  const stats = [
+    {v:PROJECTS.length, l:'Projets',   c:'var(--cyan)'},
+    {v:TASKS.length,    l:'Tâches',    c:'var(--purple)'},
+    {v:totalJobs,       l:'Jobs total',c:'var(--text)'},
+    {v:done,            l:'Complétés', c:'var(--green)'},
+    {v:inProg,          l:'En cours',  c:'var(--amber)'},
+    {v:review,          l:'En revue',  c:'var(--purple)'},
+    {v:pct+'%',         l:'Completion',c:'var(--cyan)'},
+    {v:totalCubs,       l:'Cuboïdes',  c:'var(--green)'},
+  ];
+  const sg = document.getElementById('dash-stats');
+  if(sg) sg.innerHTML = stats.map(s=>`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+      <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${s.c};line-height:1;margin-bottom:4px">${s.v}</div>
+      <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">${s.l}</div>
+    </div>`).join('');
+
+  // Jobs récents
+  const rj = document.getElementById('dash-recent-jobs');
+  if(rj) {
+    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6);
+    rj.innerHTML = recent.length ? recent.map(j=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('jobs',null,'${j.id}')">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${j.frame_count} frames · ${j.cuboids||0} cuboïdes</div>
+        </div>
+        <span class="badge ${j.state==='completed'?'badge-green':j.state==='in progress'?'badge-amber':'badge-grey'}">${j.state}</span>
+      </div>`).join('') : '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucun job</div>';
+  }
+
+  // Activité récente (jobs mis à jour récemment)
+  const da = document.getElementById('dash-activity');
+  if(da) {
+    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,5);
+    da.innerHTML = recent.map(j => {
+      const task = TASKS.find(t=>t.id===j.task_id);
+      const proj = PROJECTS.find(p=>p.id===task?.project_id);
+      const stateColor = j.state==='completed'?'var(--green)':j.state==='in progress'?'var(--amber)':'var(--text2)';
+      return `<div style="display:flex;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:6px;height:6px;border-radius:50%;background:${stateColor};flex-shrink:0;margin-top:4px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--text)">${j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${proj?.name||'—'} · ${j.cuboids||0} cuboïdes · ${j.state}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text2);white-space:nowrap">${timeAgo(j.updated_at)}</div>
+      </div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucune activité</div>';
+  }
+
+  // Présence
+  const dp = document.getElementById('dash-presence');
+  if(dp) {
+    dp.innerHTML = '<div style="padding:10px 18px 6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">En ligne</div>' +
+      (window.ONLINE_USERS||[]).map(u=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 18px">
+          <div class="avatar" style="background:${userColor(u.username)};width:24px;height:24px;font-size:10px">${u.username.slice(0,2).toUpperCase()}</div>
+          <span style="font-size:12px;color:var(--text)">${u.username}</span>
+          <span style="font-size:10px;color:var(--text2);margin-left:auto">${u.role}</span>
+        </div>`).join('') || '<div style="padding:8px 18px;font-size:11px;color:var(--text2)">Vous êtes seul(e) en ligne</div>';
+  }
+}
 
 function renderProjects() {
   const q = document.getElementById('search-projects')?.value?.toLowerCase() || '';
@@ -858,67 +937,103 @@ async function openImportModal() {
 
 async function doImport() {
   const files = window._impFiles || [];
-  if(!files.length) return;
+  if(!files.length) { toast('Aucun fichier sélectionné','#ff4444'); return; }
   const pid      = document.getElementById('imp-proj').value || null;
   const taskName = document.getElementById('imp-task-name').value.trim();
   let totalJobs  = 0;
+  let totalFrames = 0;
 
   for(const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
     let frames = [];
-    let annData = {}; // frameName -> ann JSON
+    let annData = {};
 
+    // ── Parser le ZIP Supervisely ──
     if(ext === 'zip') {
-      // Parser le ZIP Supervisely
-      const buf = await file.arrayBuffer();
       if(typeof JSZip === 'undefined'){ toast('JSZip non chargé','#ff4444'); return; }
+      toast('Lecture du ZIP...', '#ffb300');
+      const buf = await file.arrayBuffer();
       const zip = await JSZip.loadAsync(buf);
-      const annFiles = Object.keys(zip.files).filter(f=>f.startsWith('ds0/ann/')&&f.endsWith('.pcd.json')).sort();
+      const annFiles = Object.keys(zip.files)
+        .filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'))
+        .sort();
+      console.log('ZIP frames found:', annFiles.length);
       for(const af of annFiles) {
-        const name = af.replace('ds0/ann/','').replace('.pcd.json','');
-        const ann  = JSON.parse(await zip.file(af).async('string'));
-        frames.push(name);
-        annData[name] = ann;
+        const fname = af.replace('ds0/ann/','').replace('.pcd.json','');
+        const ann   = JSON.parse(await zip.file(af).async('string'));
+        frames.push(fname);
+        annData[fname] = ann;
       }
     } else {
+      // Fichier PCD/JSON unique
       frames = [file.name.replace(/\.[^.]+$/,'')];
     }
 
-    if(!frames.length) continue;
+    if(!frames.length) { toast('Aucune frame trouvée dans ' + file.name, '#ff4444'); continue; }
+    totalFrames += frames.length;
+    console.log('Creating task with', frames.length, 'frames');
 
-    // Créer la tâche
+    // ── Créer la tâche ──
     const tName = taskName || file.name.replace(/\.[^.]+$/,'');
     const { data: task, error: te } = await db.from('tasks').insert({
-      name: tName, project_id: pid, created_by: ME.name,
-      frame_count: frames.length, updated_at: new Date().toISOString()
+      name: tName,
+      project_id: pid || null,
+      created_by: ME.name,
+      frame_count: frames.length,
+      updated_at: new Date().toISOString()
     }).select().single();
-    if(te) { toast('Erreur tâche: '+te.message,'#ff4444'); continue; }
 
-    // Créer les jobs (chunks de 500)
+    if(te) {
+      console.error('Task insert error:', te);
+      toast('Erreur création tâche: ' + te.message, '#ff4444');
+      continue;
+    }
+    console.log('Task created:', task.id);
+
+    // ── Créer les jobs par chunks de 500 ──
     const CHUNK = 500;
-    for(let i=0; i<frames.length; i+=CHUNK) {
-      const chunk = frames.slice(i, i+CHUNK);
-      const cuboids = chunk.reduce((s,n)=>s+(annData[n]?.figures?.length||0),0);
-      const { error: je } = await db.from('jobs').insert({
-        task_id: task.id,
-        frame_range: chunk[0]+(chunk.length>1?' — '+chunk[chunk.length-1]:''),
+    for(let i = 0; i < frames.length; i += CHUNK) {
+      const chunk    = frames.slice(i, i + CHUNK);
+      const cuboids  = chunk.reduce((s,n) => s + (annData[n]?.figures?.length || 0), 0);
+
+      // Stocker ann_data uniquement si assez petit (< 400KB)
+      const fullAnn   = Object.fromEntries(chunk.map(n => [n, annData[n]||null]).filter(([,v])=>v));
+      const annStr    = JSON.stringify(fullAnn);
+      const annPayload = annStr.length < 400000 ? fullAnn : {};
+      if(annStr.length >= 400000) {
+        console.warn('ann_data too large (' + Math.round(annStr.length/1024) + 'KB), storing empty');
+      }
+
+      const jobPayload = {
+        task_id:     task.id,
+        frame_range: chunk[0] + (chunk.length > 1 ? ' — ' + chunk[chunk.length-1] : ''),
         frame_count: chunk.length,
         frame_names: chunk,
-        ann_data: Object.fromEntries(chunk.map(n=>[n, annData[n]||null]).filter(([,v])=>v)),
-        stage: 'annotation',
-        state: cuboids > 0 ? 'in progress' : 'new',
+        ann_data:    annPayload,
+        stage:       cuboids > 0 ? 'review' : 'annotation',
+        state:       cuboids > 0 ? 'in progress' : 'new',
         cuboids,
-        created_by: ME.name,
-        updated_at: new Date().toISOString(),
-      });
-      if(!je) totalJobs++;
+        created_by:  ME.name,
+        updated_at:  new Date().toISOString(),
+      };
+
+      console.log('Inserting job:', jobPayload.frame_range, 'cuboids:', cuboids);
+      const { data: jobData, error: je } = await db.from('jobs').insert(jobPayload).select().single();
+      if(je) {
+        console.error('Job insert error:', je);
+        toast('Erreur job: ' + je.message, '#ff4444');
+      } else {
+        console.log('Job created:', jobData.id);
+        totalJobs++;
+      }
     }
   }
 
   closeModal();
   currentTaskId = null;
-  nav('tasks', pid||currentProjectId);
-  toast(totalJobs + ' job(s) créé(s) ✓', '#00e676');
+  await loadAll();
+  nav('jobs');
+  toast(totalJobs + ' job(s) créé(s) pour ' + totalFrames + ' frames ✓', '#00e676');
 }
 
 function openNewJobModal() {
@@ -1045,4 +1160,21 @@ document.addEventListener('keydown', e => {
 });
 </script>
 </body>
-</html>
+</html><div class="page" id="page-dashboard" style="display:none">
+  <div class="dash-header">
+    <h2 id="dash-greeting" style="font-size:18px;font-weight:600;color:var(--text)">Bonjour 👋</h2>
+    <p style="font-size:12px;color:var(--text2);margin-top:2px">Vue d'ensemble de vos annotations LiDAR</p>
+  </div>
+  <div class="stats-grid" id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Jobs récents</span></div>
+      <div id="dash-recent-jobs"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Activité &amp; Présence</span></div>
+      <div id="dash-presence"></div>
+      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px" id="dash-activity"></div>
+    </div>
+  </div>
+</div>
