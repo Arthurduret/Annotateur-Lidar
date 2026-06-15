@@ -507,6 +507,7 @@ canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
 
 </div><!-- #main -->
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
@@ -2835,17 +2836,38 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     if(el) { el.textContent = msg; el.style.color = color; }
   };
 
-  // Charger Supabase
-  if(!window.supabase) {
-    await new Promise(resolve => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
-      s.onload = resolve; document.head.appendChild(s);
-    });
+  // Charger Supabase avec retry et timeout
+  setStatus('⏳ Chargement Supabase JS...', 'var(--amber)');
+  try {
+    if(!window.supabase || !window.supabase.createClient) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+        s.onload = () => setTimeout(resolve, 100); // petit délai pour init
+        s.onerror = () => reject(new Error('Impossible de charger supabase-js'));
+        document.head.appendChild(s);
+        setTimeout(() => reject(new Error('Timeout chargement supabase-js')), 10000);
+      });
+    }
+    if(!window.supabase || !window.supabase.createClient) {
+      throw new Error('supabase.createClient non disponible');
+    }
+  } catch(err) {
+    setStatus('✗ ' + err.message, 'var(--red)');
+    console.error('Supabase load error:', err);
+    return;
   }
-  const db = window.supabase.createClient(sbUrl, sbKey);
-  window._platformDb    = db;
-  window._platformJobId = jobId;
+
+  let db;
+  try {
+    db = window.supabase.createClient(sbUrl, sbKey);
+  } catch(err) {
+    setStatus('✗ createClient: ' + err.message, 'var(--red)');
+    console.error('createClient error:', err);
+    return;
+  }
+  window._platformDb     = db;
+  window._platformJobId  = jobId;
   window._platformBucket = bucket;
   window._platformPrefix = prefix;
   setStatus('✓ Connecté', 'var(--green)');
