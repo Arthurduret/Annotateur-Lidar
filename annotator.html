@@ -2887,57 +2887,62 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   async function saveToSupabase(silent=false) {
     if(!silent) setAutosave('💾 Sauvegarde...', 'var(--amber)');
 
-    // Sauvegarder EXPLICITEMENT l'imap courant dans la frame active AVANT tout
+    // 1. Copier l'imap courant dans la frame active
     if(S.frameIdx >= 0 && S.imap && S.frames[S.frameIdx]) {
-      S.frames[S.frameIdx].imap     = Array.from(S.imap);
-      S.frames[S.frameIdx].cuboids  = JSON.parse(JSON.stringify(S.cuboids));
-      S.frames[S.frameIdx].pts      = S.pts;
+      S.frames[S.frameIdx].imap    = Array.from(S.imap);
+      S.frames[S.frameIdx].cuboids = JSON.parse(JSON.stringify(S.cuboids));
+      S.frames[S.frameIdx].pts     = S.pts;
     }
 
-    // 1. Sauvegarder ann_data (cuboïdes) dans la table jobs
+    // 2. Sauvegarder les classes/instances avec leurs num (CRUCIAL pour restaurer l'imap)
+    const classesSnapshot = S.classes.map(c => ({
+      id:       c.id,
+      num:      c.num,       // l'identifiant numérique utilisé dans imap
+      typeIdx:  c.typeIdx,
+      name:     c.name,
+      title:    c.title,
+      color:    c.color,
+      shortcut: c.shortcut || '',
+    }));
+
+    // 3. Sauvegarder imap + classes dans Storage
+    const imapData = {};
+    S.frames.forEach(fr => {
+      if(fr.imap && fr.imap.some(v => v !== -1)) {
+        imapData[fr.name] = fr.imap instanceof Int32Array ? Array.from(fr.imap) : fr.imap;
+      }
+    });
+
+    const payload = { classes: classesSnapshot, imap: imapData };
+    const blob    = new Blob([JSON.stringify(payload)], {type:'application/json'});
+    const imapPath = prefix + 'imap.json';
+    const { error: se } = await db.storage.from(bucket).upload(imapPath, blob, { upsert: true });
+    if(se) console.warn('imap save error:', se.message);
+
+    // 4. ann_data (cuboïdes) dans la table jobs
     const annData = {};
     S.frames.forEach(fr => {
-      if(fr.cuboids?.length) {
-        annData[fr.name] = { figures: fr.cuboids };
-      }
+      if(fr.cuboids?.length) annData[fr.name] = { figures: fr.cuboids };
     });
     const totalCubs = S.frames.reduce((s,f) => s+(f.cuboids?.length||0), 0);
 
-    // 2. Sauvegarder les imap (points annotés) dans Storage comme fichiers binaires
-    const imapData = {};
-    S.frames.forEach(fr => {
-      if(fr.imap && fr.pts?.length && fr.imap.some(v => v !== -1)) {
-        imapData[fr.name] = Array.from(fr.imap); // convertir Int32Array en Array
-      }
-    });
-
-    // Sauvegarder imap dans Storage si des points sont annotés
-    if(Object.keys(imapData).length > 0) {
-      const imapJson = JSON.stringify(imapData);
-      const imapBlob = new Blob([imapJson], {type:'application/json'});
-      // Le prefix contient déjà projet+job, stocker imap à la racine du prefix
-    const imapPath = prefix + 'imap.json';
-      const { error: se } = await db.storage.from(bucket).upload(imapPath, imapBlob, { upsert: true });
-      if(se) console.warn('imap save error:', se.message);
-    }
-
-    // Mettre à jour la table jobs
     const { error: ue } = await db.from('jobs').update({
-      ann_data:    annData,
-      cuboids:     totalCubs,
-      state:       totalCubs > 0 ? 'in progress' : job.state,
-      updated_at:  new Date().toISOString()
+      ann_data:   annData,
+      cuboids:    totalCubs,
+      state:      totalCubs > 0 ? 'in progress' : job.state,
+      updated_at: new Date().toISOString()
     }).eq('id', jobId);
 
     if(ue) {
-      setAutosave('✗ Erreur sauvegarde', 'var(--red)');
-      if(!silent) toast('Erreur sauvegarde: '+ue.message, 'var(--red)');
+      setAutosave('✗ Erreur', 'var(--red)');
+      if(!silent) toast('Erreur: '+ue.message, 'var(--red)');
     } else {
-      const now = new Date().toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
-      setAutosave('✓ Sauvegardé à '+now, 'var(--green)');
+      const now = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+      setAutosave('✓ '+now, 'var(--green)');
       if(!silent) toast('Sauvegardé ✓ — '+totalCubs+' cuboïdes', 'var(--green)');
     }
   }
+
 
   // Bouton sauvegarde manuel
   const saveBtn = document.getElementById('btn-save-now');
@@ -2976,21 +2981,55 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   let loadedCount = 0;
   const framesToAdd = [];
 
-  // Charger les imap sauvegardés (peut ne pas exister = 400/404, c'est OK)
-  let savedImap = {};
+  // Charger imap + classes depuis Storage
+  let savedImap    = {};
+  let savedClasses = null;
   try {
     const imapPath = prefix + 'imap.json';
-    const { data: imapData, error: imapErr } = await db.storage.from(bucket).download(imapPath);
-    if(!imapErr && imapData) {
-      const txt = await imapData.text();
-      savedImap = JSON.parse(txt);
+    const { data: imapFile, error: imapErr } = await db.storage.from(bucket).download(imapPath);
+    if(!imapErr && imapFile) {
+      const payload = JSON.parse(await imapFile.text());
+      // Nouveau format : {classes, imap}
+      if(payload.classes && payload.imap) {
+        savedClasses = payload.classes;
+        savedImap    = payload.imap;
+      } else {
+        // Ancien format : juste {frameName: [...]}
+        savedImap = payload;
+      }
       const nFrames = Object.keys(savedImap).length;
-      console.log('imap restored for', nFrames, 'frames');
-      if(nFrames > 0) setStatus('✓ ' + nFrames + ' frames restaurées', 'var(--green)');
+      console.log('Restored imap for', nFrames, 'frames,', savedClasses?.length||0, 'classes');
     }
   } catch(e) {
-    // Pas encore de sauvegarde = normal au premier chargement
-    console.log('No saved imap yet (first load)');
+    console.log('No saved imap yet:', e.message);
+  }
+
+  // Restaurer les classes/instances avec leurs num EXACTS
+  if(savedClasses && savedClasses.length > 0) {
+    // Reconstruire S.classes depuis le snapshot sauvegardé
+    S.classes = savedClasses.map(c => ({
+      ...c,
+      pts: new Set(), // pts sera reconstruit par updateColors
+    }));
+    S.classVis = {};
+    S.classes.forEach(c => { S.classVis[c.id] = true; });
+    // Mettre à jour _clsSeq pour éviter les conflits
+    const maxNum = Math.max(...savedClasses.map(c => c.num), 0);
+    window._clsSeq = maxNum;
+    // Restaurer les compteurs d'instances par type
+    savedClasses.forEach(c => {
+      if(c.typeIdx !== undefined) {
+        const match = c.name.match(/#(\d+)$/);
+        if(match) {
+          const n = parseInt(match[1]);
+          if(!window._instCount) window._instCount = {};
+          window._instCount[c.typeIdx] = Math.max(window._instCount[c.typeIdx]||0, n);
+        }
+      }
+    });
+    S.activeId = S.classes[0]?.id || null;
+    renderCls();
+    console.log('Classes restored:', S.classes.map(c => c.name+'(num='+c.num+')').join(', '));
   }
 
   for(const fname of frameNames) {
