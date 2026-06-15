@@ -2428,7 +2428,7 @@ function loadFrame(idx) {
     goPhase(f.cuboids && f.cuboids.length && (!pts || !pts.length) ? 2 : 1);
     renderCls();
     updateFrameUI();
-    updateStats();
+    updateStatsPanel();
     buildFrameSelect();
   };
 
@@ -2825,7 +2825,9 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     </span>
   `;
   document.body.insertBefore(banner, document.body.firstChild);
-  document.getElementById('app').style.height = 'calc(100vh - 36px)';
+  // Ajuster hauteur si l'élément existe
+  const appEl = document.getElementById('main') || document.getElementById('app') || document.body;
+  if(appEl && appEl !== document.body) appEl.style.height = 'calc(100vh - 36px)';
 
   const setStatus = (msg, color='var(--text2)') => {
     const el = document.getElementById('platform-status');
@@ -3011,7 +3013,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   S.frames = framesToAdd;
   buildFrameSelect();
-  hideOverlay();
+  if(typeof hideOverlay === 'function') hideOverlay(); else if(document.getElementById('overlay')) document.getElementById('overlay').style.display='none';
 
   const withPCD = framesToAdd.filter(f => f.raw).length;
   const withImap = Object.keys(savedImap).length;
