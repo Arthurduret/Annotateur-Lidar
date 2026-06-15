@@ -2909,7 +2909,8 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     if(Object.keys(imapData).length > 0) {
       const imapJson = JSON.stringify(imapData);
       const imapBlob = new Blob([imapJson], {type:'application/json'});
-      const imapPath = prefix + '_annotations/' + jobId + '/imap.json';
+      // Le prefix contient déjà projet+job, stocker imap à la racine du prefix
+    const imapPath = prefix + 'imap.json';
       const { error: se } = await db.storage.from(bucket).upload(imapPath, imapBlob, { upsert: true });
       if(se) console.warn('imap save error:', se.message);
     }
@@ -2967,7 +2968,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   // D'abord charger les imap sauvegardés
   let savedImap = {};
-  const imapPath = prefix + '_annotations/' + jobId + '/imap.json';
+  const imapPath = prefix + 'imap.json';
   const { data: imapData, error: imapErr } = await db.storage.from(bucket).download(imapPath);
   if(!imapErr && imapData) {
     savedImap = JSON.parse(await imapData.text());
@@ -2984,17 +2985,19 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
     const annData = job.ann_data || {};
     const ann = annData[fname];
-    const cuboids = ann?.figures?.map(fig => {
-      const obj = ann?.objects?.find(o => o.key === fig.objectKey);
-      const g = fig.geometry;
+    const cuboids = (ann?.figures || []).filter(fig => fig?.geometry?.position).map(fig => {
+      const obj = (ann?.objects || []).find(o => o.key === fig.objectKey);
+      const g   = fig.geometry;
       return {
-        pos: g.position, rot: g.rotation, dim: g.dimensions,
+        pos: {x: g.position.x||0, y: g.position.y||0, z: g.position.z||0},
+        rot: {x: g.rotation?.x||0, y: g.rotation?.y||0, z: g.rotation?.z||0},
+        dim: {x: g.dimensions?.x||1, y: g.dimensions?.y||1, z: g.dimensions?.z||1},
         classTitle: obj?.classTitle || 'Cable Electrique',
-        name: obj?.classTitle || 'Cable Electrique',
-        color: CLASS_TYPES.find(t => t.type === obj?.classTitle)?.color || '#ff9f43',
+        name:       obj?.classTitle || 'Cable Electrique',
+        color: CLASS_TYPES.find(t => t.type === (obj?.classTitle||''))?.color || '#ff9f43',
         npts: 0,
       };
-    }) || [];
+    });
 
     framesToAdd.push({
       name:      fname,
