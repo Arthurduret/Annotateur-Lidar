@@ -470,11 +470,16 @@ async function initApp() {
 }
 
 async function loadAll() {
-  const [{ data: projects }, { data: tasks }, { data: jobs }] = await Promise.all([
+  // Ne pas charger ann_data (peut être très gros) dans le select global
+  // On le chargera uniquement quand on ouvre un job spécifique
+  const [{ data: projects, error: pe }, { data: tasks, error: te }, { data: jobs, error: je }] = await Promise.all([
     db.from('projects').select('*').order('created_at', {ascending:false}),
     db.from('tasks').select('*').order('created_at', {ascending:false}),
-    db.from('jobs').select('*').order('created_at', {ascending:false}),
+    db.from('jobs').select('id,task_id,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at', {ascending:false}),
   ]);
+  if(pe) console.error('projects error:', pe.message);
+  if(te) console.error('tasks error:', te.message);
+  if(je) console.error('jobs error:', je.message, je.code, je.details);
   PROJECTS = projects || [];
   TASKS    = tasks    || [];
   JOBS     = jobs     || [];
@@ -484,7 +489,7 @@ async function subscribeRealtime() {
   db.channel('db-changes')
     .on('postgres_changes', {event:'*', schema:'public', table:'projects'}, async () => { const {data} = await db.from('projects').select('*').order('created_at',{ascending:false}); PROJECTS=data||[]; if(currentPage==='projects') renderProjects(); })
     .on('postgres_changes', {event:'*', schema:'public', table:'tasks'},    async () => { const {data} = await db.from('tasks').select('*').order('created_at',{ascending:false}); TASKS=data||[]; if(currentPage==='tasks') renderTasks(); })
-    .on('postgres_changes', {event:'*', schema:'public', table:'jobs'},     async () => { const {data} = await db.from('jobs').select('*').order('created_at',{ascending:false}); JOBS=data||[]; if(currentPage==='jobs') renderJobs(); })
+    .on('postgres_changes', {event:'*', schema:'public', table:'jobs'},     async () => { const {data} = await db.from('jobs').select('id,task_id,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at',{ascending:false}); JOBS=data||[]; if(currentPage==='jobs') renderJobs(); })
     .subscribe(status => setRTStatus(status === 'SUBSCRIBED'));
 }
 
@@ -1234,9 +1239,15 @@ async function doUploadPCDs(jobId, prefix) {
   }, 800);
 }
 
-function openAnnotator(jobId) {
+async function openAnnotator(jobId) {
   currentJobId = jobId;
-  const job  = JOBS.find(j=>j.id===jobId);
+  let job = JOBS.find(j=>j.id===jobId);
+
+  // Charger ann_data à la demande (pas dans le select global)
+  if(job && !job.ann_data) {
+    const { data: fullJob, error } = await db.from('jobs').select('ann_data').eq('id', jobId).single();
+    if(!error && fullJob) job = {...job, ann_data: fullJob.ann_data};
+  }
   const task = job ? TASKS.find(t=>t.id===job.task_id) : null;
   const proj = task ? PROJECTS.find(p=>p.id===task.project_id) : null;
 
