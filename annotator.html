@@ -2479,60 +2479,94 @@ async function addFrameFiles(files) {
   let added = 0;
 
   for(const file of arr) {
-    const ext = file.name.split('.').pop().toLowerCase();
+    const ext      = file.name.split('.').pop().toLowerCase();
     const baseName = file.name.replace(/\.[^.]+$/, '');
 
-    // ── ZIP Supervisely : extraire toutes les frames + annotations ──
+    // ── ZIP Supervisely ──
     if(ext === 'zip') {
       try {
         const buf = await file.arrayBuffer();
         const zip = await JSZip.loadAsync(buf);
-        S.cvatZip = buf; // garder comme référence pour l'export
-        // Lire meta pour les classes si dispo
+        S.cvatZip = buf;
+
+        // Lire meta pour les couleurs
         const metaFile = zip.file('meta.json');
+        const colorMap = {}; // title -> color
         if(metaFile) {
           const meta = JSON.parse(await metaFile.async('string'));
-          // Importer les types de classes depuis le ZIP si non existants
-          if(meta.classes) {
-            meta.classes.forEach(cls => {
-              if(!CLASS_TYPES.find(t => t.type === cls.title)) {
-                const labelsTag = meta.tags && meta.tags.find(t => t.name === 'labels');
-                const labelInfo = labelsTag && labelsTag.value && labelsTag.value.find(l => l.name === cls.title);
-                CLASS_TYPES.push({ type: cls.title, color: labelInfo?.color || '#00e5ff' });
-                // Réinitialiser les instances
-                _instCount[CLASS_TYPES.length-1] = 0;
-              }
-            });
+          const labelsTag = meta.tags?.find(t => t.name === 'labels');
+          (labelsTag?.value || []).forEach(l => { colorMap[l.name] = l.color; });
+        }
+
+        const annFiles = Object.keys(zip.files)
+          .filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'))
+          .sort();
+
+        // Passe 1 : collecter tous les objets uniques par classTitle
+        // pour créer les instances AVANT de traiter les frames
+        const objKeyToInstance = {}; // objectKey -> instance cls
+
+        for(const annPath of annFiles) {
+          const ann = JSON.parse(await zip.file(annPath).async('string'));
+          for(const obj of (ann.objects || [])) {
+            if(objKeyToInstance[obj.key]) continue;
+            const title = obj.classTitle || 'Cable Electrique';
+
+            // Trouver le type
+            let typeIdx = CLASS_TYPES.findIndex(t => t.type === title);
+            if(typeIdx < 0) {
+              CLASS_TYPES.push({ type: title, color: colorMap[title] || '#00e5ff' });
+              typeIdx = CLASS_TYPES.length - 1;
+            }
+
+            // Créer une nouvelle instance pour cet objet
+            const inst = mkInstance(typeIdx);
+            // Appliquer la couleur du fichier si disponible
+            if(colorMap[title]) {
+              const n = (_instCount[typeIdx] || 1) - 1;
+              inst.color = shiftColor(colorMap[title], n * 22);
+            }
+            S.classes.push(inst);
+            S.classVis[inst.id] = true;
+            objKeyToInstance[obj.key] = inst;
           }
         }
-        // Parcourir les fichiers ann
-        const annFiles = Object.keys(zip.files).filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'));
-        for(const annPath of annFiles.sort()) {
+
+        // Passe 2 : charger chaque frame avec ses cuboïdes mappés aux bonnes instances
+        for(const annPath of annFiles) {
           const frameName = annPath.replace('ds0/ann/','').replace('.pcd.json','');
           if(S.frames.find(f => f.name === frameName)) continue;
-          const annText = await zip.file(annPath).async('string');
-          const ann = JSON.parse(annText);
-          // Extraire les cuboïdes
-          const cuboids = [];
-          ann.figures && ann.figures.forEach(fig => {
-            const obj = ann.objects && ann.objects.find(o => o.key === fig.objectKey);
-            if(!obj || fig.geometryType !== 'cuboid_3d') return;
-            const g = fig.geometry;
-            cuboids.push({
-              pos: {x:g.position.x,   y:g.position.y,   z:g.position.z},
-              rot: {x:g.rotation.x,   y:g.rotation.y,   z:g.rotation.z},
-              dim: {x:g.dimensions.x, y:g.dimensions.y, z:g.dimensions.z},
-              classTitle: obj.classTitle,
-              name: obj.classTitle,
-              color: CLASS_TYPES.find(t=>t.type===obj.classTitle)?.color || '#00e5ff',
-              npts: 0,
-              fromImport: true
+
+          const ann = JSON.parse(await zip.file(annPath).async('string'));
+
+          const cuboids = (ann.figures || [])
+            .filter(fig => fig.geometryType === 'cuboid_3d' && fig.geometry?.position)
+            .map(fig => {
+              const obj  = (ann.objects || []).find(o => o.key === fig.objectKey);
+              const inst = obj ? objKeyToInstance[obj.key] : null;
+              const g    = fig.geometry;
+              return {
+                pos:        { x: g.position.x,   y: g.position.y,   z: g.position.z },
+                rot:        { x: g.rotation?.x||0, y: g.rotation?.y||0, z: g.rotation?.z||0 },
+                dim:        { x: g.dimensions.x,  y: g.dimensions.y,  z: g.dimensions.z },
+                classTitle: obj?.classTitle || 'Cable Electrique',
+                name:       inst?.name || obj?.classTitle || 'Cable Electrique',
+                color:      inst?.color || colorMap[obj?.classTitle] || '#ff9f43',
+                npts:       0,
+              };
             });
+
+          S.frames.push({
+            name: frameName,
+            raw: null, pts: null, imap: null,
+            cuboids,
+            undoStack: [], redoStack: []
           });
-          S.frames.push({ name:frameName, raw:null, pts:null, imap:null, cuboids, undoStack:[], redoStack:[], annRaw:annText });
           added++;
         }
-        toast('ZIP importé: ' + annFiles.length + ' frames', 'var(--green)');
+
+        renderCls();
+        if(added > 0) toast(added + ' frame(s) importée(s) depuis ZIP ✓', 'var(--green)');
       } catch(err) {
         console.error(err);
         toast('Erreur ZIP: ' + err.message, 'var(--red)');
@@ -2540,54 +2574,58 @@ async function addFrameFiles(files) {
       continue;
     }
 
-    // ── JSON annotations (notre format export) ──
+    // ── JSON annotations (notre format) ──
     if(ext === 'json') {
       try {
         const text = await file.text();
-        const d = JSON.parse(text);
-        // Format: {meta, points:[{x,y,z,class_id,class_name,instance}]}
+        const d    = JSON.parse(text);
         if(d.meta && d.points) {
           const frameName = d.meta.frame || baseName;
           if(S.frames.find(f => f.name === frameName)) continue;
-          // Reconstruire pts et imap depuis les points annotés
-          const pts = d.points.map(p => ({x:p.x, y:p.y, z:p.z, label:0, prob:0}));
-          const imap = new Int32Array(pts.length).fill(-1);
-          // Mapper class_id → num d'instance
-          d.points.forEach((p, i) => { if(p.class_id !== -1) imap[i] = p.class_id; });
-          // Importer les classes si nécessaire
-          d.meta.classes && d.meta.classes.forEach(cls => {
-            if(!S.classes.find(c => c.num === cls.id)) {
-              const typeIdx = CLASS_TYPES.findIndex(t => t.type === cls.name.replace(/ #\d+$/, ''));
-              if(typeIdx >= 0) {
-                const inst = mkInstance(typeIdx);
-                inst.num = cls.id;
-                S.classes.push(inst);
-                S.classVis[inst.id] = true;
-              }
-            }
-          });
+          const pts   = d.points.map(p => ({x:p.x, y:p.y, z:p.z, label:0, prob:0}));
+          const imap  = new Int32Array(pts.length).fill(-1);
+          d.points.forEach((p,i) => { if(p.class_id !== -1) imap[i] = p.class_id; });
           S.frames.push({ name:frameName, raw:null, pts, imap:Array.from(imap), cuboids:[], undoStack:[], redoStack:[] });
           added++;
           continue;
         }
       } catch(e) {}
-      // Sinon traiter comme PCD JSON
     }
 
     // ── PCD / XYZ / TXT classique ──
     if(S.frames.find(f => f.name === baseName)) continue;
     const text = await file.text();
+
+    // Si en mode plateforme → uploader le PCD dans Supabase Storage automatiquement
+    if(window._platformDb && window._platformPrefix) {
+      const storagePath = window._platformPrefix + file.name;
+      const blob = new Blob([text], {type:'text/plain'});
+      const { error: ue } = await window._platformDb.storage
+        .from(window._platformBucket || 'lidar-files')
+        .upload(storagePath, blob, { upsert: true });
+      if(ue) console.warn('Auto-upload error:', ue.message);
+      else   console.log('Auto-uploaded to Storage:', storagePath);
+    }
+
     S.frames.push({ name:baseName, raw:text, pts:null, imap:null, cuboids:[], undoStack:[], redoStack:[] });
     added++;
   }
 
-  // Rebuild classes globales si des nouveaux types ont été ajoutés
   if(S.classes.length === 0) initClasses();
-  renderCls();
   buildFrameSelect();
-  toast(added + ' frame(s) ajoutee(s) — total: ' + S.frames.length, 'var(--cyan)');
-  if(S.frameIdx < 0 && S.frames.length > 0) loadFrame(0);
-  else updateFrameUI();
+  if(added > 0) {
+    toast(added + ' frame(s) ajoutée(s)', 'var(--cyan)');
+    if(S.frameIdx < 0) loadFrame(0);
+    else updateFrameUI();
+
+    // Si en mode plateforme → marquer le job comme ayant ses PCD
+    if(window._platformDb && window._platformJobId) {
+      window._platformDb.from('jobs')
+        .update({ pcd_uploaded: true, frame_count: S.frames.length, updated_at: new Date().toISOString() })
+        .eq('id', window._platformJobId)
+        .then(({error}) => { if(error) console.warn('job update error:', error.message); });
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
