@@ -140,37 +140,26 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 .project-labels{display:flex;gap:4px;flex-wrap:wrap}
 .label-chip{padding:2px 7px;border-radius:3px;font-size:9px;font-weight:600;letter-spacing:.3px}
 
-/* ── TASKS GRID (style CVAT cards) ── */
-.tasks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;padding:20px}
-.task-card{
-  background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);
-  overflow:hidden;cursor:pointer;transition:all .15s;display:flex;flex-direction:column;
+/* ── TASKS TABLE (style CVAT) ── */
+.tasks-header{
+  display:flex;align-items:center;gap:10px;padding:12px 20px;
+  border-bottom:1px solid var(--b1);
 }
-.task-card:hover{border-color:var(--b3);box-shadow:0 4px 20px rgba(0,0,0,.3)}
-.task-thumb{
-  height:120px;background:var(--s3);display:flex;align-items:center;justify-content:center;
-  position:relative;overflow:hidden;flex-shrink:0;
+.task-row{
+  background:var(--s1);border-bottom:1px solid var(--b1);
+  display:grid;grid-template-columns:auto 1fr auto;
+  cursor:pointer;transition:background .1s;
 }
-.task-thumb i{font-size:36px;color:var(--t3)}
-.task-thumb-badge{
-  position:absolute;top:8px;right:8px;background:rgba(0,0,0,.75);
-  color:var(--cyan);font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:3px;
-}
-.task-thumb-jobs{
-  position:absolute;bottom:8px;left:8px;background:rgba(0,0,0,.75);
-  color:var(--t1);font-size:10px;padding:3px 8px;border-radius:3px;display:flex;align-items:center;gap:5px;
-}
-.task-info{padding:12px 14px 10px;display:flex;flex-direction:column;gap:5px;flex:1}
-.task-name{font-size:14px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.task-submeta{font-size:11px;color:var(--t2);line-height:1.5}
+.task-row:hover{background:var(--s2)}
+.task-thumb{width:80px;height:60px;background:var(--s3);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.task-thumb i{font-size:24px;color:var(--t3)}
+.task-body{padding:10px 16px;display:flex;flex-direction:column;gap:4px}
+.task-name{font-size:13px;font-weight:600;color:var(--t1)}
+.task-submeta{font-size:11px;color:var(--t2)}
 .task-progress-row{display:flex;align-items:center;gap:8px;margin-top:4px}
-.prog-bar{height:5px;background:var(--s3);border-radius:3px;overflow:hidden;flex:1}
-.prog-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:3px;transition:width .3s}
-.task-footer{
-  display:flex;align-items:center;justify-content:space-between;gap:8px;
-  border-top:1px solid var(--b1);padding:8px 14px;
-}
-.task-actions{display:flex;align-items:center;gap:6px}
+.prog-bar{height:4px;background:var(--s3);border-radius:2px;overflow:hidden;flex:1;max-width:200px}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:2px;transition:width .3s}
+.task-actions{padding:10px 16px;display:flex;align-items:center;gap:8px}
 
 /* ── JOBS TABLE (style CVAT exact) ── */
 .jobs-container{padding:0 20px 20px}
@@ -336,47 +325,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
   <div id="main">
     <div id="content">
 
-      <!-- ── DASHBOARD PAGE ── -->
-      <div id="page-dashboard" class="page" style="display:none;padding:24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-          <div>
-            <h2 id="dash-greeting" style="font-size:20px;font-weight:700;color:var(--t1);margin:0">Bonjour 👋</h2>
-            <p style="font-size:12px;color:var(--t2);margin:4px 0 0">Vue d'ensemble de vos annotations LiDAR</p>
-          </div>
-        </div>
-        <!-- Stats -->
-        <div id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px"></div>
-        <!-- Barre de progression globale -->
-        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:16px 20px;margin-bottom:24px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:13px;font-weight:600;color:var(--t1)">Progression globale</span>
-            <span id="dash-pct" style="font-size:13px;font-weight:700;color:var(--cyan);font-family:var(--mono)">0%</span>
-          </div>
-          <div style="height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
-            <div id="dash-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:4px;transition:width .4s;width:0%"></div>
-          </div>
-          <div style="display:flex;gap:16px;margin-top:10px" id="dash-progress-labels"></div>
-        </div>
-        <!-- Grille: Jobs récents + Activité -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden">
-            <div style="padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px">
-              <i class="ti ti-briefcase" style="color:var(--cyan)"></i>
-              <span style="font-size:13px;font-weight:600;color:var(--t1)">Jobs récents</span>
-            </div>
-            <div id="dash-recent-jobs"></div>
-          </div>
-          <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden">
-            <div style="padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px">
-              <i class="ti ti-users" style="color:var(--purple)"></i>
-              <span style="font-size:13px;font-weight:600;color:var(--t1)">Annotateurs en ligne</span>
-            </div>
-            <div id="dash-presence"></div>
-            <div style="border-top:1px solid var(--b1)" id="dash-activity"></div>
-          </div>
-        </div>
-      </div>
-
       <!-- ── PROJECTS PAGE ── -->
       <div id="page-projects" class="page" style="display:none">
         <div class="toolbar">
@@ -399,7 +347,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
             <button class="btn btn-ghost btn-sm" onclick="setTaskFilter('review',this)">Revue</button>
           </div>
           <div class="toolbar-sep"></div>
-          <button class="btn btn-ghost btn-sm" onclick="openMergeTasksModal()"><i class="ti ti-git-merge"></i> Regrouper en tâche</button>
           <button class="btn btn-ghost btn-sm" onclick="openImportModal()"><i class="ti ti-upload"></i> Importer</button>
           <button class="btn btn-primary btn-sm" onclick="openNewTaskModal()"><i class="ti ti-plus"></i> Nouvelle tâche</button>
         </div>
@@ -411,7 +358,6 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
         <div class="toolbar">
           <span class="toolbar-title" id="jobs-title">Jobs</span>
           <div class="toolbar-sep"></div>
-          <button class="btn btn-ghost btn-sm" onclick="openUploadToTaskModal()"><i class="ti ti-cloud-upload"></i> Ajouter des frames</button>
           <button class="btn btn-primary btn-sm" onclick="openNewJobModal()"><i class="ti ti-plus"></i> Nouveau job</button>
         </div>
         <div class="jobs-container" id="jobs-list"></div>
@@ -626,102 +572,76 @@ function renderDashboard() {
   const h = new Date().getHours();
   const greet = h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir';
   const g = document.getElementById('dash-greeting');
-  if(g) g.textContent = greet + ', ' + ME.name + ' 👋';
+  if(g) g.textContent = greet+', '+ME.name+' 👋';
 
-  const totalJobs  = JOBS.length;
-  const newJobs    = JOBS.filter(j=>j.state==='new').length;
-  const inProg     = JOBS.filter(j=>j.state==='in progress').length;
-  const inReview   = JOBS.filter(j=>j.state==='on review').length;
-  const done       = JOBS.filter(j=>j.state==='completed').length;
-  const totalFrames= JOBS.reduce((s,j)=>s+(j.frame_count||0),0);
-  const totalCubs  = JOBS.reduce((s,j)=>s+(j.cuboids||0),0);
-  const pct        = totalJobs ? Math.round(done/totalJobs*100) : 0;
+  const totalJobs   = JOBS.length;
+  const newJobs     = JOBS.filter(j=>j.state==='new').length;
+  const inProg      = JOBS.filter(j=>j.state==='in progress').length;
+  const review      = JOBS.filter(j=>j.stage==='review').length;
+  const done        = JOBS.filter(j=>j.state==='completed').length;
+  const totalCubs   = JOBS.reduce((s,j)=>s+(j.cuboids||0),0);
+  const pct         = totalJobs ? Math.round(done/totalJobs*100) : 0;
 
-  // Stats cards
+  const stats = [
+    {v:PROJECTS.length, l:'Projets',   c:'var(--cyan)'},
+    {v:TASKS.length,    l:'Tâches',    c:'var(--purple)'},
+    {v:totalJobs,       l:'Jobs total',c:'var(--text)'},
+    {v:done,            l:'Complétés', c:'var(--green)'},
+    {v:inProg,          l:'En cours',  c:'var(--amber)'},
+    {v:review,          l:'En revue',  c:'var(--purple)'},
+    {v:pct+'%',         l:'Completion',c:'var(--cyan)'},
+    {v:totalCubs,       l:'Cuboïdes',  c:'var(--green)'},
+  ];
   const sg = document.getElementById('dash-stats');
-  if(sg) sg.innerHTML = [
-    {v:PROJECTS.length, l:'Projets',      c:'var(--cyan)',   i:'ti-layout-grid'},
-    {v:TASKS.length,    l:'Tâches',       c:'var(--purple)', i:'ti-list-check'},
-    {v:totalJobs,       l:'Jobs',         c:'var(--t1)',     i:'ti-briefcase'},
-    {v:totalFrames,     l:'Frames total', c:'var(--t2)',     i:'ti-stack'},
-    {v:done,            l:'Terminés',     c:'var(--green)',  i:'ti-circle-check'},
-    {v:inProg,          l:'En cours',     c:'var(--amber)',  i:'ti-progress'},
-    {v:inReview,        l:'En revue',     c:'var(--purple)', i:'ti-eye'},
-    {v:totalCubs,       l:'Cuboïdes',     c:'var(--cyan)',   i:'ti-box'},
-  ].map(s=>`
-    <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:16px 18px;display:flex;flex-direction:column;gap:6px">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <span style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--t2)">${s.l}</span>
-        <i class="ti ${s.i}" style="font-size:14px;color:${s.c};opacity:.6"></i>
-      </div>
-      <div style="font-size:26px;font-weight:700;font-family:var(--mono);color:${s.c};line-height:1">${s.v}</div>
+  if(sg) sg.innerHTML = stats.map(s=>`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px">
+      <div style="font-size:24px;font-weight:700;font-family:var(--mono);color:${s.c};line-height:1;margin-bottom:4px">${s.v}</div>
+      <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">${s.l}</div>
     </div>`).join('');
-
-  // Barre de progression globale
-  const pb = document.getElementById('dash-progress-bar');
-  const pp = document.getElementById('dash-pct');
-  if(pb) pb.style.width = pct + '%';
-  if(pp) pp.textContent = pct + '%';
-  const pl = document.getElementById('dash-progress-labels');
-  if(pl) pl.innerHTML = [
-    {v:newJobs,  l:'Nouveau',   c:'var(--t2)'},
-    {v:inProg,   l:'En cours',  c:'var(--amber)'},
-    {v:inReview, l:'En revue',  c:'var(--purple)'},
-    {v:done,     l:'Terminé',   c:'var(--green)'},
-  ].map(x=>`<span style="font-size:10px;color:${x.c}">● ${x.v} ${x.l}</span>`).join('');
 
   // Jobs récents
   const rj = document.getElementById('dash-recent-jobs');
   if(rj) {
-    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,8);
-    rj.innerHTML = recent.length ? recent.map(j=>{
-      const task = TASKS.find(t=>t.id===j.task_id);
-      const sc = {new:'var(--t2)','in progress':'var(--amber)','on review':'var(--purple)',completed:'var(--green)'}[j.state]||'var(--t2)';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--b1);cursor:pointer" onclick="openTask('${j.task_id}')">
-        <div style="width:7px;height:7px;border-radius:50%;background:${sc};flex-shrink:0"></div>
+    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6);
+    rj.innerHTML = recent.length ? recent.map(j=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('jobs',null,'${j.id}')">
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.name||j.frame_range||'Job'}</div>
-          <div style="font-size:10px;color:var(--t2)">${task?.name||'—'} · ${j.frame_count||0} frames · ${j.cuboids||0} cuboïdes</div>
+          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${j.frame_count} frames · ${j.cuboids||0} cuboïdes</div>
         </div>
-        <span style="font-size:10px;color:${sc};white-space:nowrap">${j.state}</span>
-      </div>`;
-    }).join('') : '<div style="padding:24px;text-align:center;font-size:12px;color:var(--t2)">Aucun job</div>';
+        <span class="badge ${j.state==='completed'?'badge-green':j.state==='in progress'?'badge-amber':'badge-grey'}">${j.state}</span>
+      </div>`).join('') : '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucun job</div>';
   }
 
-  // Présence + Activité récente
-  const dp = document.getElementById('dash-presence');
-  if(dp) {
-    const users = window.ONLINE_USERS||[];
-    dp.innerHTML = users.length
-      ? users.map(u=>`
-          <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--b1)">
-            <div class="avatar" style="background:${userColor(u.username)};width:26px;height:26px;font-size:10px">${u.username.slice(0,2).toUpperCase()}</div>
-            <span style="font-size:12px;color:var(--t1)">${u.username}</span>
-            <div style="width:6px;height:6px;border-radius:50%;background:var(--green);margin-left:auto"></div>
-          </div>`).join('')
-      : '<div style="padding:16px;font-size:11px;color:var(--t2);text-align:center">Vous êtes seul(e) en ligne</div>';
-  }
-
+  // Activité récente (jobs mis à jour récemment)
   const da = document.getElementById('dash-activity');
   if(da) {
     const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,5);
-    if(recent.length) {
-      da.innerHTML = '<div style="padding:10px 16px 6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--t2)">Activité récente</div>' +
-        recent.map(j=>{
-          const task = TASKS.find(t=>t.id===j.task_id);
-          const sc = {new:'var(--t2)','in progress':'var(--amber)','on review':'var(--purple)',completed:'var(--green)'}[j.state]||'var(--t2)';
-          return `<div style="display:flex;gap:10px;padding:8px 16px;border-top:1px solid var(--b1)">
-            <div style="width:6px;height:6px;border-radius:50%;background:${sc};flex-shrink:0;margin-top:4px"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:11px;color:var(--t1)">${j.name||j.frame_range||'Job'}</div>
-              <div style="font-size:10px;color:var(--t2)">${task?.name||'—'} · ${j.cuboids||0} cuboïdes</div>
-            </div>
-            <div style="font-size:10px;color:var(--t3);white-space:nowrap">${timeAgo(j.updated_at)}</div>
-          </div>`;
-        }).join('');
-    } else {
-      da.innerHTML = '';
-    }
+    da.innerHTML = recent.map(j => {
+      const task = TASKS.find(t=>t.id===j.task_id);
+      const proj = PROJECTS.find(p=>p.id===task?.project_id);
+      const stateColor = j.state==='completed'?'var(--green)':j.state==='in progress'?'var(--amber)':'var(--text2)';
+      return `<div style="display:flex;gap:10px;padding:10px 18px;border-bottom:1px solid var(--border)">
+        <div style="width:6px;height:6px;border-radius:50%;background:${stateColor};flex-shrink:0;margin-top:4px"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--text)">${j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${proj?.name||'—'} · ${j.cuboids||0} cuboïdes · ${j.state}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text2);white-space:nowrap">${timeAgo(j.updated_at)}</div>
+      </div>`;
+    }).join('') || '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucune activité</div>';
+  }
+
+  // Présence
+  const dp = document.getElementById('dash-presence');
+  if(dp) {
+    dp.innerHTML = '<div style="padding:10px 18px 6px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">En ligne</div>' +
+      (window.ONLINE_USERS||[]).map(u=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 18px">
+          <div class="avatar" style="background:${userColor(u.username)};width:24px;height:24px;font-size:10px">${u.username.slice(0,2).toUpperCase()}</div>
+          <span style="font-size:12px;color:var(--text)">${u.username}</span>
+          <span style="font-size:10px;color:var(--text2);margin-left:auto">${u.role}</span>
+        </div>`).join('') || '<div style="padding:8px 18px;font-size:11px;color:var(--text2)">Vous êtes seul(e) en ligne</div>';
   }
 }
 
@@ -842,46 +762,29 @@ function renderTasks() {
     return;
   }
 
-  list.className = 'tasks-grid';
   list.innerHTML = filtered.map(t => {
     const jobs   = JOBS.filter(j=>j.task_id===t.id);
     const done   = jobs.filter(j=>j.state==='completed').length;
     const review = jobs.filter(j=>j.state==='on review').length;
     const inprog = jobs.filter(j=>j.state==='in progress').length;
-    const frames = jobs.reduce((s,j)=>s+(j.frame_count||0), 0);
     const pct    = jobs.length ? Math.round(done/jobs.length*100) : 0;
-    const statusBadge = done===jobs.length && jobs.length>0
-      ? `<span style="font-size:10px;color:var(--green);font-weight:600">✓ Terminé</span>`
-      : inprog ? `<span style="font-size:10px;color:var(--amber);font-weight:600">En cours</span>`
-      : `<span style="font-size:10px;color:var(--t2)">Nouveau</span>`;
     return `
-    <div class="task-card" onclick="openTask('${t.id}')">
-      <div class="task-thumb">
-        <i class="ti ti-3d-cube-sphere"></i>
-        <div class="task-thumb-badge">${frames} frames</div>
-        <div class="task-thumb-jobs"><i class="ti ti-briefcase" style="font-size:11px"></i> ${jobs.length} job${jobs.length!==1?'s':''}</div>
-      </div>
-      <div class="task-info">
-        <div class="task-name" title="${t.name}">${t.name}</div>
-        <div class="task-submeta">Créé par <b style="color:var(--t1)">${t.created_by}</b> · ${timeAgo(t.created_at)}</div>
+    <div class="task-row" onclick="openTask('${t.id}')">
+      <div class="task-thumb"><i class="ti ti-3d-cube-sphere"></i></div>
+      <div class="task-body">
+        <div class="task-name">#${t.id?.slice(-4)||'???'}: ${t.name}</div>
+        <div class="task-submeta">Créé par ${t.created_by} · ${timeAgo(t.created_at)}</div>
         <div class="task-progress-row">
-          ${statusBadge}
-          <span style="font-size:10px;color:var(--t3)">${done}/${jobs.length} terminés</span>
+          ${done?`<span style="font-size:10px;color:var(--green)">• ${done} terminé</span>`:''}
+          ${review?`<span style="font-size:10px;color:var(--purple)">• ${review} en revue</span>`:''}
+          ${inprog?`<span style="font-size:10px;color:var(--amber)">• ${inprog} en cours</span>`:''}
+          <span style="font-size:10px;color:var(--t2)">• ${jobs.length} total</span>
           <div class="prog-bar"><div class="prog-fill" style="width:${pct}%"></div></div>
-          <span style="font-size:10px;color:var(--t3)">${pct}%</span>
         </div>
       </div>
-      <div class="task-footer" onclick="event.stopPropagation()">
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          ${done?`<span class="status s-done">${done} terminé${done>1?'s':''}</span>`:''}
-          ${review?`<span class="status s-review">${review} en revue</span>`:''}
-          ${inprog?`<span class="status s-progress">${inprog} en cours</span>`:''}
-          ${!done&&!review&&!inprog&&jobs.length>0?`<span class="status s-new">${jobs.length} nouveau${jobs.length>1?'x':''}</span>`:''}
-        </div>
-        <div class="task-actions">
-          <button class="btn btn-primary btn-sm" onclick="openTask('${t.id}')"><i class="ti ti-external-link"></i> Ouvrir</button>
-          <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTask('${t.id}')"><i class="ti ti-trash"></i></button>
-        </div>
+      <div class="task-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-primary btn-sm" onclick="openTask('${t.id}')"><i class="ti ti-external-link"></i> Ouvrir</button>
+        <button class="btn btn-ghost btn-sm btn-icon" onclick="deleteTask('${t.id}')"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
   }).join('');
@@ -904,120 +807,6 @@ async function deleteTask(id) {
   await db.from('jobs').delete().eq('task_id', id);
   await db.from('tasks').delete().eq('id', id);
   toast('Tâche supprimée', '#ffb300');
-}
-
-// ── Regrouper toutes les tâches du projet en une seule tâche avec jobs de N frames ──
-function openMergeTasksModal() {
-  const tasks = currentProjectId ? TASKS.filter(t=>t.project_id===currentProjectId) : TASKS;
-  if(tasks.length < 2) { toast('Il faut au moins 2 tâches à regrouper', '#ffb300'); return; }
-
-  // Collecter toutes les frames de toutes les tâches
-  const allFrames = [];
-  for(const t of tasks) {
-    const jobs = JOBS.filter(j=>j.task_id===t.id);
-    for(const j of jobs) {
-      for(const fn of (j.frame_names||[])) {
-        allFrames.push({ name: fn, prefix: j.storage_prefix });
-      }
-    }
-  }
-  allFrames.sort((a,b)=>a.name.localeCompare(b.name));
-
-  openModal('Regrouper en une tâche', `
-    <div style="font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.6">
-      <b style="color:var(--cyan)">${tasks.length} tâches</b> trouvées avec
-      <b style="color:var(--cyan)">${allFrames.length} frames</b> au total.<br>
-      Elles vont être regroupées en <b style="color:var(--t1)">une seule tâche</b> avec des jobs automatiques.
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      <div>
-        <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Nom de la nouvelle tâche</label>
-        <input class="form-i" id="merge-name" type="text" placeholder="ex: Vol la Fare" style="width:100%" value="">
-      </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <div style="flex:1">
-          <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Frames par job</label>
-          <input class="form-i" id="merge-chunk" type="number" value="50" min="1" max="500" style="width:100%">
-        </div>
-        <div style="flex:1">
-          <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Jobs créés</label>
-          <div style="font-size:18px;font-weight:700;color:var(--cyan);font-family:var(--mono)">${Math.ceil(allFrames.length/50)}</div>
-        </div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--t2)">
-        <input type="checkbox" id="merge-delete" checked style="accent-color:var(--cyan)">
-        Supprimer les anciennes tâches après regroupement
-      </label>
-    </div>
-  `, `
-    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
-    <button class="btn btn-primary btn-sm" onclick="doMergeTasks()"><i class="ti ti-git-merge"></i> Regrouper</button>
-  `);
-
-  // Stocker les données pour doMergeTasks
-  window._mergeData = { tasks, allFrames };
-}
-
-async function doMergeTasks() {
-  const name  = document.getElementById('merge-name')?.value?.trim();
-  const chunk = parseInt(document.getElementById('merge-chunk')?.value) || 50;
-  const doDelete = document.getElementById('merge-delete')?.checked ?? true;
-  if(!name) { toast('Donne un nom à la tâche', '#ff4444'); return; }
-
-  const { tasks, allFrames } = window._mergeData || {};
-  if(!allFrames?.length) { closeModal(); return; }
-
-  const btn = document.querySelector('#modal-footer .btn-primary');
-  if(btn) { btn.disabled = true; btn.textContent = 'Regroupement...'; }
-
-  // 1. Créer la nouvelle tâche
-  const { data: newTask, error: te } = await db.from('tasks').insert({
-    name,
-    project_id:  currentProjectId || tasks[0]?.project_id || null,
-    frame_count: allFrames.length,
-    stage:       'annotation',
-    created_by:  ME.name,
-    updated_at:  new Date().toISOString(),
-  }).select().single();
-
-  if(te || !newTask) { toast('Erreur création tâche: '+(te?.message||'?'), '#ff4444'); if(btn){btn.disabled=false;btn.textContent='Regrouper';} return; }
-
-  // 2. Créer les jobs par chunks — réutiliser le storage_prefix d'origine
-  let jobsCreated = 0;
-  for(let i = 0; i < allFrames.length; i += chunk) {
-    const chunkFrames = allFrames.slice(i, i + chunk);
-    const frameNames  = chunkFrames.map(f=>f.name);
-    // Préfixe = celui du 1er frame du chunk (tous dans le même projet normalement)
-    const prefix = chunkFrames[0]?.prefix || null;
-
-    const { error: je } = await db.from('jobs').insert({
-      task_id:        newTask.id,
-      frame_names:    frameNames,
-      frame_count:    frameNames.length,
-      frame_range:    frameNames[0] + (frameNames.length>1 ? ' — '+frameNames[frameNames.length-1] : ''),
-      storage_prefix: prefix,
-      pcd_uploaded:   !!prefix,
-      stage:          'annotation',
-      state:          'new',
-      cuboids:        0,
-      created_by:     ME.name,
-      updated_at:     new Date().toISOString(),
-    });
-    if(!je) jobsCreated++;
-  }
-
-  // 3. Supprimer les anciennes tâches si demandé
-  if(doDelete) {
-    for(const t of tasks) {
-      await db.from('jobs').delete().eq('task_id', t.id);
-      await db.from('tasks').delete().eq('id', t.id);
-    }
-  }
-
-  await loadAll();
-  closeModal();
-  toast(`✓ "${name}" créée — ${jobsCreated} job(s) de ~${chunk} frames`, '#00e676');
-  renderTasks();
 }
 
 // ════════════════════════════════════════════════════════
@@ -1045,7 +834,7 @@ async function renderJobs() {
     return `
     <div class="job-card" id="jc-${j.id}">
       <div class="job-header">
-        <span class="job-id">${j.name||'Job #'+j.id?.slice(-4)}</span>
+        <span class="job-id">#${j.id?.slice(-6)||'???'}</span>
         <span class="stage ${stageClass}">${j.stage||'annotation'}</span>
         <span class="status ${stateClass}">${j.state||'new'}</span>
         <span class="job-meta">${j.frame_count||0} frames · ${j.frame_range||'—'}</span>
@@ -1129,142 +918,24 @@ async function deleteJob(id) {
 function openNewTaskModal() {
   const projs = PROJECTS.map(p=>`<option value="${p.id}" ${p.id===currentProjectId?'selected':''}>${p.name}</option>`).join('');
   openModal('Nouvelle tâche', `
-    <div class="form-g"><label class="form-l">Nom de la tâche</label><input class="form-i" id="nt-name" placeholder="Ex: Vol la Fare" autofocus></div>
+    <div class="form-g"><label class="form-l">Nom</label><input class="form-i" id="nt-name" placeholder="Ex: Mission_2026_batch1" autofocus></div>
     <div class="form-g"><label class="form-l">Projet</label><select class="form-s" id="nt-proj">${projs}</select></div>
-    <div style="height:1px;background:var(--b1);margin:8px 0"></div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-      <div style="flex:1">
-        <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);display:block;margin-bottom:5px">Frames par job</label>
-        <input class="form-i" id="nt-chunk" type="number" value="50" min="1" max="500" oninput="updateNTPreview()">
-      </div>
-      <div style="flex:2;font-size:11px;color:var(--t3);padding-top:18px">
-        ex: 300 fichiers PCD → 6 jobs de 50 frames
-      </div>
-    </div>
-    <div style="border:2px dashed var(--b2);border-radius:8px;padding:24px;text-align:center;cursor:pointer;transition:all .2s"
-         onclick="document.getElementById('nt-files').click()"
-         ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
-         ondragleave="this.style.borderColor='var(--b2)'"
-         ondrop="event.preventDefault();this.style.borderColor='var(--b2)';window._ntFiles=[...event.dataTransfer.files];updateNTPreview()">
-      <div style="font-size:28px;margin-bottom:8px">📂</div>
-      <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px">Cliquer ou glisser les fichiers PCD</div>
-      <div style="font-size:11px;color:var(--t2)">.pcd · .xyz · .txt — multi-sélection possible</div>
-    </div>
-    <input type="file" id="nt-files" multiple accept=".pcd,.xyz,.txt" style="display:none"
-           onchange="window._ntFiles=[...this.files];updateNTPreview()">
-    <div id="nt-preview" style="margin-top:10px;font-size:12px;color:var(--t2)"></div>
-    <div id="nt-progress" style="display:none;margin-top:12px">
-      <div style="font-size:11px;color:var(--t2);margin-bottom:5px" id="nt-progress-lbl">Préparation...</div>
-      <div style="height:5px;background:var(--b1);border-radius:3px">
-        <div id="nt-progress-bar" style="height:100%;background:var(--cyan);border-radius:3px;width:0%;transition:width .15s"></div>
-      </div>
-    </div>
-  `, `
-    <button class="btn btn-ghost" onclick="closeModal()">Annuler</button>
-    <button class="btn btn-primary" id="nt-btn" onclick="createTask()"><i class="ti ti-plus"></i> Créer la tâche</button>
-  `);
-  window._ntFiles = [];
-}
-
-function updateNTPreview() {
-  const files = window._ntFiles || [];
-  const chunk = parseInt(document.getElementById('nt-chunk')?.value) || 50;
-  const jobCount = Math.ceil(files.length / chunk);
-  const prev = document.getElementById('nt-preview');
-  if(prev) prev.innerHTML = files.length
-    ? `<div style="color:var(--cyan);font-weight:600">${files.length} fichier(s) → ${jobCount} job(s) de ~${chunk} frames</div>
-       <div style="color:var(--t3);margin-top:2px">${Array.from(files).map(f=>f.name).slice(0,5).join(', ')}${files.length>5?' …':''}</div>`
-    : `<div style="color:var(--t3)">Aucun fichier — la tâche sera créée vide (tu pourras ajouter des frames plus tard)</div>`;
+  `, `<button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="createTask()">Créer</button>`);
 }
 
 async function createTask() {
-  const name  = document.getElementById('nt-name')?.value?.trim();
-  const pid   = document.getElementById('nt-proj')?.value;
-  const chunk = parseInt(document.getElementById('nt-chunk')?.value) || 50;
-  const files = Array.from(window._ntFiles || []).sort((a,b)=>a.name.localeCompare(b.name));
-  if(!name) { toast('Donne un nom à la tâche', '#ff4444'); return; }
-
-  const btn = document.getElementById('nt-btn');
-  const bar = document.getElementById('nt-progress-bar');
-  const lbl = document.getElementById('nt-progress-lbl');
-  const prog = document.getElementById('nt-progress');
-  if(btn) btn.disabled = true;
-
-  // 1. Créer la tâche
-  const { data: task, error: te } = await db.from('tasks').insert({
+  const name = document.getElementById('nt-name').value.trim();
+  const pid  = document.getElementById('nt-proj').value;
+  if(!name) return;
+  const { data: task, error } = await db.from('tasks').insert({
     name, project_id: pid||null, created_by: ME.name,
-    frame_count: files.length,
     updated_at: new Date().toISOString()
   }).select().single();
-  if(te || !task) { toast('Erreur: '+(te?.message||'?'), '#ff4444'); if(btn) btn.disabled=false; return; }
-
-  // 2. Si pas de fichiers → ouvrir la tâche directement
-  if(!files.length) {
-    await loadAll();
-    closeModal();
-    currentTaskId = task.id;
-    nav('jobs', pid||currentProjectId, task.id);
-    toast('Tâche créée ✓', '#00d4ff');
-    return;
-  }
-
-  // 3. Uploader les PCD et créer les jobs
-  if(prog) prog.style.display = 'block';
-  const frameNames = files.map(f => f.name.replace(/\.[^.]+$/, ''));
-  let jobsCreated = 0, totalUploaded = 0;
-
-  const existingJobCount = JOBS.filter(j=>j.task_id===task.id).length;
-  for(let i = 0; i < frameNames.length; i += chunk) {
-    const chunkFrames = frameNames.slice(i, i + chunk);
-    const chunkFiles  = files.slice(i, i + chunk);
-    const jobNum = existingJobCount + jobsCreated + 1;
-
-    // Créer le job d'abord pour obtenir son ID
-    const { data: job, error: je } = await db.from('jobs').insert({
-      task_id:        task.id,
-      name:           'Job ' + jobNum,
-      frame_names:    chunkFrames,
-      frame_count:    chunkFrames.length,
-      frame_range:    chunkFrames[0] + (chunkFrames.length>1 ? ' — '+chunkFrames[chunkFrames.length-1] : ''),
-      storage_prefix: null,
-      pcd_uploaded:   false,
-      stage: 'annotation', state: 'new', cuboids: 0,
-      created_by: ME.name, updated_at: new Date().toISOString(),
-    }).select().single();
-
-    if(je || !job) { toast('Erreur job: '+(je?.message||'?'), '#ff4444'); continue; }
-
-    // Uploader dans dossier isolé pcd/{projectId}/{jobId}/
-    const prefix = 'pcd/' + (pid||'shared') + '/' + job.id + '/';
-    let uploaded = 0;
-    for(const file of chunkFiles) {
-      if(lbl) lbl.textContent = `Job ${jobsCreated+1} — Upload ${totalUploaded+1}/${files.length}: ${file.name}`;
-      if(bar) bar.style.width = Math.round((totalUploaded / files.length) * 95) + '%';
-      const { error } = await db.storage.from('lidar-files').upload(prefix + file.name, file, { upsert: true });
-      if(error) {
-        if(lbl) lbl.textContent = `❌ Erreur: ${error.message}`;
-        toast('Erreur upload: ' + error.message, '#ff4444');
-        if(btn) btn.disabled = false;
-        return;
-      }
-      uploaded++;
-      totalUploaded++;
-    }
-
-    await db.from('jobs').update({ storage_prefix: prefix, pcd_uploaded: uploaded>0 }).eq('id', job.id);
-    jobsCreated++;
-  }
-
-  if(bar) bar.style.width = '100%';
-  if(lbl) lbl.textContent = `${jobsCreated} job(s) créé(s) ✓`;
-
-  await loadAll();
-  setTimeout(() => {
-    closeModal();
-    currentTaskId = task.id;
-    nav('jobs', pid||currentProjectId, task.id);
-    toast(`✓ "${name}" — ${jobsCreated} job(s) · ${totalUploaded} PCD uploadés`, '#00e676');
-  }, 500);
+  if(error) { toast('Erreur: '+error.message,'#ff4444'); return; }
+  closeModal();
+  currentTaskId = task.id;
+  nav('jobs', pid||currentProjectId, task.id);
+  toast('Tâche créée ✓', '#00d4ff');
 }
 
 async function openImportModal() {
@@ -1328,35 +999,40 @@ async function doImport() {
   if(!files.length) { toast('Aucun fichier sélectionné','#ff4444'); return; }
   const pid      = document.getElementById('imp-proj').value || null;
   const taskName = document.getElementById('imp-task-name').value.trim();
+  const CHUNK    = 500; // frames par job
   let totalJobs  = 0;
   let totalFrames = 0;
 
   for(const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
-    let frames  = [];
-    let annData = {};
-    let pcdFiles = {}; // frameName -> File object
+    let frames  = [];   // liste des noms de frames
+    let annData = {};   // frameName -> ann JSON
 
     // ── Parser ZIP Supervisely ──
     if(ext === 'zip') {
       if(typeof JSZip === 'undefined'){ toast('JSZip non chargé','#ff4444'); return; }
       toast('Lecture du ZIP...', '#ffb300');
-      const buf = await file.arrayBuffer();
-      const zip = await JSZip.loadAsync(buf);
-      const annFiles = Object.keys(zip.files)
-        .filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'))
-        .sort();
-      for(const af of annFiles) {
-        const fname = af.replace('ds0/ann/','').replace('.pcd.json','');
-        const ann   = JSON.parse(await zip.file(af).async('string'));
-        frames.push(fname);
-        annData[fname] = ann;
+      try {
+        const buf = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const annFiles = Object.keys(zip.files)
+          .filter(f => f.startsWith('ds0/ann/') && f.endsWith('.pcd.json'))
+          .sort();
+        for(const af of annFiles) {
+          const fname = af.replace('ds0/ann/','').replace('.pcd.json','');
+          const ann   = JSON.parse(await zip.file(af).async('string'));
+          frames.push(fname);
+          annData[fname] = ann;
+        }
+        toast(frames.length + ' frames détectées dans le ZIP', '#ffb300');
+      } catch(e) {
+        toast('Erreur lecture ZIP: '+e.message, '#ff4444');
+        continue;
       }
     } else if(['pcd','xyz','txt'].includes(ext)) {
-      // Fichier PCD unique
-      const fname = file.name.replace(/\.[^.]+$/,'');
-      frames = [fname];
-      pcdFiles[fname] = file;
+      frames = [file.name.replace(/\.[^.]+$/,'')];
+    } else if(ext === 'json') {
+      frames = [file.name.replace(/\.[^.]+$/,'')];
     } else {
       frames = [file.name.replace(/\.[^.]+$/,'')];
     }
@@ -1364,52 +1040,67 @@ async function doImport() {
     if(!frames.length) continue;
     totalFrames += frames.length;
 
-    // ── Upload PCD vers Supabase Storage ──
-    const pcdFilesToUpload = Object.entries(pcdFiles);
-    if(pcdFilesToUpload.length > 0) {
-      toast('Upload PCD en cours (0/' + pcdFilesToUpload.length + ')...', '#ffb300');
-      let uploaded = 0;
-      for(const [fname, pcdFile] of pcdFilesToUpload) {
-        const storagePath = 'pcd/' + (pid||'shared') + '/' + fname + '.' + pcdFile.name.split('.').pop();
-        const { error: ue } = await db.storage.from('lidar-files').upload(storagePath, pcdFile, { upsert: true });
-        if(ue) console.warn('Upload warning:', ue.message);
-        else uploaded++;
-        toast('Upload PCD (' + uploaded + '/' + pcdFilesToUpload.length + ')...', '#ffb300');
-      }
-    }
-
     // ── Créer la tâche ──
     const tName = taskName || file.name.replace(/\.[^.]+$/,'');
     const { data: task, error: te } = await db.from('tasks').insert({
-      name: tName, project_id: pid || null, created_by: ME.name,
-      frame_count: frames.length, updated_at: new Date().toISOString()
+      name:        tName,
+      project_id:  pid || null,
+      created_by:  ME.name,
+      frame_count: frames.length,
+      updated_at:  new Date().toISOString()
     }).select().single();
-    if(te) { toast('Erreur tâche: '+te.message,'#ff4444'); continue; }
 
-    // ── Créer les jobs par chunks de 500 ──
-    const CHUNK = 500;
+    if(te) {
+      console.error('Task insert error:', te);
+      toast('Erreur création tâche: '+te.message, '#ff4444');
+      continue;
+    }
+    console.log('Task created:', task.id, tName);
+
+    // ── Créer les jobs par chunks ──
     for(let i = 0; i < frames.length; i += CHUNK) {
-      const chunk   = frames.slice(i, i + CHUNK);
+      const chunk = frames.slice(i, i + CHUNK);
+
+      // Compter les cuboïdes de ce chunk
       const cuboids = chunk.reduce((s,n) => s + (annData[n]?.figures?.length||0), 0);
-      const fullAnn = Object.fromEntries(chunk.map(n=>[n,annData[n]||null]).filter(([,v])=>v));
-      const annStr  = JSON.stringify(fullAnn);
-      const annPayload = annStr.length < 400000 ? fullAnn : {};
+
+      // ann_data : stocker les annotations de ce chunk uniquement
+      // Vérifier la taille pour ne pas dépasser Supabase (1MB max par row)
+      const chunkAnn = {};
+      chunk.forEach(n => { if(annData[n]) chunkAnn[n] = annData[n]; });
+      const annStr = JSON.stringify(chunkAnn);
+      const annPayload = annStr.length < 800000 ? chunkAnn : {};
+      if(annStr.length >= 800000) {
+        console.warn('ann_data trop grand ('+Math.round(annStr.length/1024)+'KB) pour le job, stockage vide');
+      }
+
+      // Prefix unique par tâche ET par job pour isoler les PCD
+      // Format : pcd/<projet>/<task_id>/<job_index>/
+      const jobIndex   = Math.floor(i / CHUNK);
+      const storagePrefix = 'pcd/' + (pid||'noproj') + '/' + task.id + '/' + jobIndex + '/';
 
       const { data: jobData, error: je } = await db.from('jobs').insert({
-        task_id:     task.id,
-        frame_range: chunk[0] + (chunk.length>1?' — '+chunk[chunk.length-1]:''),
-        frame_count: chunk.length,
-        frame_names: chunk,
-        ann_data:    annPayload,
-        storage_prefix: 'pcd/' + (pid||'shared') + '/',
-        stage:   cuboids>0?'review':'annotation',
-        state:   cuboids>0?'in progress':'new',
-        cuboids, created_by: ME.name,
-        updated_at: new Date().toISOString(),
+        task_id:        task.id,
+        frame_range:    chunk[0] + (chunk.length > 1 ? ' — ' + chunk[chunk.length-1] : ''),
+        frame_count:    chunk.length,
+        frame_names:    chunk,
+        ann_data:       annPayload,
+        storage_prefix: storagePrefix,
+        stage:          cuboids > 0 ? 'review' : 'annotation',
+        state:          cuboids > 0 ? 'in progress' : 'new',
+        cuboids,
+        created_by:     ME.name,
+        updated_at:     new Date().toISOString(),
       }).select().single();
 
-      if(je) { toast('Erreur job: '+je.message,'#ff4444'); console.error(je); }
-      else    { totalJobs++; }
+      if(je) {
+        console.error('Job insert error:', je);
+        toast('Erreur job '+(jobIndex+1)+': '+je.message, '#ff4444');
+      } else {
+        console.log('Job created:', jobData.id, storagePrefix, chunk.length, 'frames');
+        totalJobs++;
+        toast('Job '+(jobIndex+1)+'/'+Math.ceil(frames.length/CHUNK)+' créé...', '#ffb300');
+      }
     }
   }
 
@@ -1543,138 +1234,6 @@ async function doUploadPCDs(jobId, prefix) {
   }, 800);
 }
 
-// ── Upload PCD dans une tâche → jobs isolés par dossier ──
-async function openUploadToTaskModal() {
-  const task = TASKS.find(t => t.id === currentTaskId);
-  if(!task) { toast('Ouvre une tâche d\'abord', '#ff4444'); return; }
-  const proj = PROJECTS.find(p => p.id === task.project_id);
-
-  openModal('Ajouter des frames — ' + task.name, `
-    <div style="font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.6">
-      Glisse tes fichiers PCD. Ils seront découpés en jobs et chaque job aura
-      <b style="color:var(--t1)">son propre dossier isolé</b> dans le Storage.
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-      <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);white-space:nowrap">Frames par job</label>
-      <input class="form-i" id="utask-chunk" type="number" value="50" min="1" max="500" style="width:80px" oninput="updateUTaskPreview()">
-    </div>
-    <div style="border:2px dashed var(--b2);border-radius:8px;padding:28px;text-align:center;cursor:pointer;transition:all .2s"
-         onclick="document.getElementById('utask-input').click()"
-         ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
-         ondragleave="this.style.borderColor='var(--b2)'"
-         ondrop="event.preventDefault();this.style.borderColor='var(--b2)';window._utaskFiles=[...event.dataTransfer.files];updateUTaskPreview()">
-      <div style="font-size:28px;margin-bottom:8px">📂</div>
-      <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px">Cliquer ou glisser les fichiers PCD</div>
-      <div style="font-size:11px;color:var(--t2)">.pcd · .xyz · .txt</div>
-    </div>
-    <input type="file" id="utask-input" multiple accept=".pcd,.xyz,.txt" style="display:none"
-           onchange="window._utaskFiles=[...this.files];updateUTaskPreview()">
-    <div id="utask-preview" style="margin-top:10px;font-size:11px;color:var(--t2)"></div>
-    <div id="utask-progress" style="display:none;margin-top:12px">
-      <div style="font-size:11px;color:var(--t2);margin-bottom:5px" id="utask-progress-lbl">Préparation...</div>
-      <div style="height:5px;background:var(--b1);border-radius:3px">
-        <div id="utask-progress-bar" style="height:100%;background:var(--cyan);border-radius:3px;width:0%;transition:width .15s"></div>
-      </div>
-    </div>
-  `, `
-    <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
-    <button class="btn btn-primary btn-sm" id="utask-btn" onclick="doUploadToTask('${task.id}','${proj?.id||'shared'}')" disabled>
-      <i class="ti ti-cloud-upload"></i> Uploader & créer les jobs
-    </button>
-  `);
-}
-
-function updateUTaskPreview() {
-  const files = window._utaskFiles || [];
-  const btn = document.getElementById('utask-btn');
-  if(btn) btn.disabled = !files.length;
-  const prev = document.getElementById('utask-preview');
-  if(!prev) return;
-  const chunk = parseInt(document.getElementById('utask-chunk')?.value) || 50;
-  const jobCount = Math.ceil(files.length / chunk);
-  prev.innerHTML = files.length
-    ? `<div style="color:var(--cyan);margin-bottom:4px"><b>${files.length}</b> fichier(s) → <b>${jobCount}</b> job(s) de ~${chunk} frames</div>
-       <div style="color:var(--t3)">${Array.from(files).map(f=>f.name).slice(0,6).join(', ')}${files.length>6?' …':''}</div>`
-    : '';
-}
-
-async function doUploadToTask(taskId, projectId) {
-  const files = Array.from(window._utaskFiles || []).sort((a,b) => a.name.localeCompare(b.name));
-  if(!files.length) return;
-  const chunk = parseInt(document.getElementById('utask-chunk')?.value) || 50;
-
-  const btn  = document.getElementById('utask-btn');
-  const bar  = document.getElementById('utask-progress-bar');
-  const lbl  = document.getElementById('utask-progress-lbl');
-  const prog = document.getElementById('utask-progress');
-  if(btn)  btn.disabled = true;
-  if(prog) prog.style.display = 'block';
-
-  const frameNames = files.map(f => f.name.replace(/\.[^.]+$/, ''));
-  let jobsCreated = 0;
-  let totalUploaded = 0;
-
-  // ── Créer les jobs PAR CHUNK, uploader dans le dossier propre à chaque job ──
-  const existingCount = JOBS.filter(j=>j.task_id===taskId).length;
-  for(let i = 0; i < frameNames.length; i += chunk) {
-    const chunkFrames = frameNames.slice(i, i + chunk);
-    const chunkFiles  = files.slice(i, i + chunk);
-    const jobNum = existingCount + jobsCreated + 1;
-
-    // 1. Créer le job d'abord pour obtenir son ID
-    const { data: job, error: je } = await db.from('jobs').insert({
-      task_id:     taskId,
-      name:        'Job ' + jobNum,
-      frame_names: chunkFrames,
-      frame_count: chunkFrames.length,
-      frame_range: chunkFrames[0] + (chunkFrames.length > 1 ? ' — ' + chunkFrames[chunkFrames.length-1] : ''),
-      storage_prefix: null,
-      pcd_uploaded: false,
-      stage: 'annotation', state: 'new', cuboids: 0,
-      created_by: ME.name, updated_at: new Date().toISOString(),
-    }).select().single();
-
-    if(je || !job) { toast('Erreur création job: '+(je?.message||'?'), '#ff4444'); continue; }
-
-    // 2. Uploader les PCD dans le dossier isolé pcd/{projectId}/{jobId}/
-    const prefix = 'pcd/' + projectId + '/' + job.id + '/';
-    let uploaded = 0;
-    for(const file of chunkFiles) {
-      if(lbl) lbl.textContent = 'Job ' + (jobsCreated+1) + ' — Upload ' + (totalUploaded+1) + '/' + files.length + ': ' + file.name;
-      if(bar) bar.style.width = Math.round((totalUploaded / files.length) * 90) + '%';
-      const { error: ue } = await db.storage.from('lidar-files').upload(prefix + file.name, file, { upsert: true });
-      if(!ue) { uploaded++; totalUploaded++; }
-      else console.warn('Upload:', file.name, ue.message);
-    }
-
-    // 3. Mettre à jour le job avec le bon prefix
-    await db.from('jobs').update({
-      storage_prefix: prefix,
-      pcd_uploaded: uploaded > 0,
-      updated_at: new Date().toISOString()
-    }).eq('id', job.id);
-
-    jobsCreated++;
-  }
-
-  // Mettre à jour le frame_count de la tâche
-  const task = TASKS.find(t => t.id === taskId);
-  await db.from('tasks').update({
-    frame_count: (task?.frame_count||0) + frameNames.length,
-    updated_at: new Date().toISOString()
-  }).eq('id', taskId);
-
-  if(bar) bar.style.width = '100%';
-  if(lbl) lbl.textContent = jobsCreated + ' job(s) créé(s) ✓';
-
-  await loadAll();
-  setTimeout(() => {
-    closeModal();
-    toast(jobsCreated + ' job(s) — ' + totalUploaded + ' PCD uploadés ✓', '#00e676');
-    renderJobs();
-  }, 500);
-}
-
 function openAnnotator(jobId) {
   currentJobId = jobId;
   const job  = JOBS.find(j=>j.id===jobId);
@@ -1700,8 +1259,7 @@ function openAnnotator(jobId) {
     + '&key='     + encodeURIComponent(SUPABASE_KEY)
     + '&user='    + encodeURIComponent(ME.name)
     + '&bucket='  + encodeURIComponent('lidar-files')
-    + '&prefix='  + encodeURIComponent(storagePrefix)
-    + '&v='       + Date.now();
+    + '&prefix='  + encodeURIComponent(storagePrefix);
 
   view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
 
@@ -1773,4 +1331,21 @@ document.addEventListener('keydown', e => {
 });
 </script>
 </body>
-</html>
+</html><div class="page" id="page-dashboard" style="display:none">
+  <div class="dash-header">
+    <h2 id="dash-greeting" style="font-size:18px;font-weight:600;color:var(--text)">Bonjour 👋</h2>
+    <p style="font-size:12px;color:var(--text2);margin-top:2px">Vue d'ensemble de vos annotations LiDAR</p>
+  </div>
+  <div class="stats-grid" id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0"></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Jobs récents</span></div>
+      <div id="dash-recent-jobs"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Activité &amp; Présence</span></div>
+      <div id="dash-presence"></div>
+      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px" id="dash-activity"></div>
+    </div>
+  </div>
+</div>
