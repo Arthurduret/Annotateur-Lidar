@@ -2894,16 +2894,18 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
       S.frames[S.frameIdx].pts     = S.pts;
     }
 
-    // 2. Sauvegarder les classes/instances avec leurs num (CRUCIAL pour restaurer l'imap)
+    // 2. Sauvegarder les classes/instances avec leurs num + raccourcis
     const classesSnapshot = S.classes.map(c => ({
       id:       c.id,
-      num:      c.num,       // l'identifiant numérique utilisé dans imap
+      num:      c.num,
       typeIdx:  c.typeIdx,
       name:     c.name,
       title:    c.title,
       color:    c.color,
       shortcut: c.shortcut || '',
     }));
+    // Sauvegarder aussi les raccourcis globaux
+    const shortcutsSnapshot = typeof SHORTCUTS !== 'undefined' ? SHORTCUTS : [];
 
     // 3. Sauvegarder imap + classes dans Storage
     const imapData = {};
@@ -2913,7 +2915,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
       }
     });
 
-    const payload = { classes: classesSnapshot, imap: imapData };
+    const payload = { classes: classesSnapshot, shortcuts: shortcutsSnapshot, imap: imapData };
     const blob    = new Blob([JSON.stringify(payload)], {type:'application/json'});
     const imapPath = prefix + 'imap.json';
     const { error: se } = await db.storage.from(bucket).upload(imapPath, blob, { upsert: true });
@@ -2984,6 +2986,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   // Charger imap + classes depuis Storage
   let savedImap    = {};
   let savedClasses = null;
+  let payload_ref  = {};
   try {
     const imapPath = prefix + 'imap.json';
     const { data: imapFile, error: imapErr } = await db.storage.from(bucket).download(imapPath);
@@ -2991,11 +2994,13 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
       const payload = JSON.parse(await imapFile.text());
       // Nouveau format : {classes, imap}
       if(payload.classes && payload.imap) {
-        savedClasses = payload.classes;
-        savedImap    = payload.imap;
+        savedClasses    = payload.classes;
+        savedImap       = payload.imap;
+        window.payload_ref = payload; // garder ref pour shortcuts
       } else {
         // Ancien format : juste {frameName: [...]}
         savedImap = payload;
+        window.payload_ref = {};
       }
       const nFrames = Object.keys(savedImap).length;
       console.log('Restored imap for', nFrames, 'frames,', savedClasses?.length||0, 'classes');
@@ -3030,6 +3035,17 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     S.activeId = S.classes[0]?.id || null;
     renderCls();
     console.log('Classes restored:', S.classes.map(c => c.name+'(num='+c.num+')').join(', '));
+  }
+
+  // Restaurer les raccourcis globaux si sauvegardés
+  if(savedClasses && payload_ref.shortcuts && payload_ref.shortcuts.length > 0 && typeof SHORTCUTS !== 'undefined') {
+    // Fusionner : garder les raccourcis sauvegardés, ne pas écraser les fixes
+    payload_ref.shortcuts.forEach(saved => {
+      const sc = SHORTCUTS.find(s => s.id === saved.id);
+      if(sc && !sc.fixed) sc.key = saved.key;
+    });
+    renderShortcutsDisplay();
+    console.log('Shortcuts restored');
   }
 
   for(const fname of frameNames) {
