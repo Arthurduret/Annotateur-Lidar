@@ -356,6 +356,42 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
   <div id="main">
     <div id="content">
 
+      <!-- ── DASHBOARD PAGE ── -->
+      <div id="page-dashboard" class="page" style="display:none;padding:24px">
+        <div style="margin-bottom:20px">
+          <h2 id="dash-greeting" style="font-size:20px;font-weight:700;color:var(--t1);margin:0">Bonjour 👋</h2>
+          <p style="font-size:12px;color:var(--t2);margin:4px 0 0">Vue d'ensemble de vos annotations LiDAR</p>
+        </div>
+        <div id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px"></div>
+        <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);padding:16px 20px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <span style="font-size:13px;font-weight:600;color:var(--t1)">Progression globale</span>
+            <span id="dash-pct" style="font-size:13px;font-weight:700;color:var(--cyan);font-family:var(--mono)">0%</span>
+          </div>
+          <div style="height:8px;background:var(--s3);border-radius:4px;overflow:hidden">
+            <div id="dash-progress-bar" style="height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));border-radius:4px;transition:width .4s;width:0%"></div>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:10px" id="dash-progress-labels"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px">
+              <i class="ti ti-briefcase" style="color:var(--cyan)"></i>
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">Jobs récents</span>
+            </div>
+            <div id="dash-recent-jobs"></div>
+          </div>
+          <div style="background:var(--s1);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden">
+            <div style="padding:12px 16px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px">
+              <i class="ti ti-users" style="color:var(--purple)"></i>
+              <span style="font-size:13px;font-weight:600;color:var(--t1)">Annotateurs en ligne</span>
+            </div>
+            <div id="dash-presence"></div>
+            <div style="border-top:1px solid var(--b1)" id="dash-activity"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- ── PROJECTS PAGE ── -->
       <div id="page-projects" class="page" style="display:none">
         <div class="toolbar">
@@ -508,7 +544,7 @@ async function loadAll() {
   const [{ data: projects, error: pe }, { data: tasks, error: te }, { data: jobs, error: je }] = await Promise.all([
     db.from('projects').select('*').order('created_at', {ascending:false}),
     db.from('tasks').select('*').order('created_at', {ascending:false}),
-    db.from('jobs').select('id,task_id,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at', {ascending:false}),
+    db.from('jobs').select('id,task_id,name,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at', {ascending:false}),
   ]);
   if(pe) console.error('projects error:', pe.message);
   if(te) console.error('tasks error:', te.message);
@@ -522,7 +558,7 @@ async function subscribeRealtime() {
   db.channel('db-changes')
     .on('postgres_changes', {event:'*', schema:'public', table:'projects'}, async () => { const {data} = await db.from('projects').select('*').order('created_at',{ascending:false}); PROJECTS=data||[]; if(currentPage==='projects') renderProjects(); })
     .on('postgres_changes', {event:'*', schema:'public', table:'tasks'},    async () => { const {data} = await db.from('tasks').select('*').order('created_at',{ascending:false}); TASKS=data||[]; if(currentPage==='tasks') renderTasks(); })
-    .on('postgres_changes', {event:'*', schema:'public', table:'jobs'},     async () => { const {data} = await db.from('jobs').select('id,task_id,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at',{ascending:false}); JOBS=data||[]; if(currentPage==='jobs') renderJobs(); })
+    .on('postgres_changes', {event:'*', schema:'public', table:'jobs'},     async () => { const {data} = await db.from('jobs').select('id,task_id,name,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at',{ascending:false}); JOBS=data||[]; if(currentPage==='jobs') renderJobs(); })
     .subscribe(status => setRTStatus(status === 'SUBSCRIBED'));
 }
 
@@ -1621,7 +1657,8 @@ async function openAnnotator(jobId) {
     + '&key='     + encodeURIComponent(SUPABASE_KEY)
     + '&user='    + encodeURIComponent(ME.name)
     + '&bucket='  + encodeURIComponent('lidar-files')
-    + '&prefix='  + encodeURIComponent(storagePrefix);
+    + '&prefix='  + encodeURIComponent(storagePrefix)
+    + '&v='       + Date.now();
 
   view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
 
@@ -1693,21 +1730,4 @@ document.addEventListener('keydown', e => {
 });
 </script>
 </body>
-</html><div class="page" id="page-dashboard" style="display:none">
-  <div class="dash-header">
-    <h2 id="dash-greeting" style="font-size:18px;font-weight:600;color:var(--text)">Bonjour 👋</h2>
-    <p style="font-size:12px;color:var(--text2);margin-top:2px">Vue d'ensemble de vos annotations LiDAR</p>
-  </div>
-  <div class="stats-grid" id="dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:20px 0"></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-    <div class="card">
-      <div class="card-header"><span class="card-title">Jobs récents</span></div>
-      <div id="dash-recent-jobs"></div>
-    </div>
-    <div class="card">
-      <div class="card-header"><span class="card-title">Activité &amp; Présence</span></div>
-      <div id="dash-presence"></div>
-      <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px" id="dash-activity"></div>
-    </div>
-  </div>
-</div>
+</html>
