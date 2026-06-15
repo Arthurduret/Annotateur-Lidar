@@ -2886,7 +2886,13 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   // ── Fonction de sauvegarde centrale ──
   async function saveToSupabase(silent=false) {
     if(!silent) setAutosave('💾 Sauvegarde...', 'var(--amber)');
-    saveCurrentFrame(); // sauvegarder la frame courante en mémoire
+
+    // Sauvegarder EXPLICITEMENT l'imap courant dans la frame active AVANT tout
+    if(S.frameIdx >= 0 && S.imap && S.frames[S.frameIdx]) {
+      S.frames[S.frameIdx].imap     = Array.from(S.imap);
+      S.frames[S.frameIdx].cuboids  = JSON.parse(JSON.stringify(S.cuboids));
+      S.frames[S.frameIdx].pts      = S.pts;
+    }
 
     // 1. Sauvegarder ann_data (cuboïdes) dans la table jobs
     const annData = {};
@@ -2954,25 +2960,37 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   // ── Sauvegarder quand on change de frame ──
   const origLoadFrame = window.loadFrame;
-  window.loadFrame = function(idx) {
-    // Sauvegarder la frame courante avant de changer
-    if(S.frameIdx >= 0 && S.frames.length) {
-      saveToSupabase(true); // silent save
+  window.loadFrame = async function(idx) {
+    // Sauvegarder d'abord l'imap de la frame courante
+    if(S.frameIdx >= 0 && S.imap && S.frames[S.frameIdx]) {
+      S.frames[S.frameIdx].imap    = Array.from(S.imap);
+      S.frames[S.frameIdx].cuboids = JSON.parse(JSON.stringify(S.cuboids));
     }
+    // Puis charger la nouvelle frame
     origLoadFrame(idx);
+    // Sauvegarder en silence après le changement
+    setTimeout(() => saveToSupabase(true), 500);
   };
 
   // ── Charger les PCD depuis Storage ──
   let loadedCount = 0;
   const framesToAdd = [];
 
-  // D'abord charger les imap sauvegardés
+  // Charger les imap sauvegardés (peut ne pas exister = 400/404, c'est OK)
   let savedImap = {};
-  const imapPath = prefix + 'imap.json';
-  const { data: imapData, error: imapErr } = await db.storage.from(bucket).download(imapPath);
-  if(!imapErr && imapData) {
-    savedImap = JSON.parse(await imapData.text());
-    console.log('imap loaded for', Object.keys(savedImap).length, 'frames');
+  try {
+    const imapPath = prefix + 'imap.json';
+    const { data: imapData, error: imapErr } = await db.storage.from(bucket).download(imapPath);
+    if(!imapErr && imapData) {
+      const txt = await imapData.text();
+      savedImap = JSON.parse(txt);
+      const nFrames = Object.keys(savedImap).length;
+      console.log('imap restored for', nFrames, 'frames');
+      if(nFrames > 0) setStatus('✓ ' + nFrames + ' frames restaurées', 'var(--green)');
+    }
+  } catch(e) {
+    // Pas encore de sauvegarde = normal au premier chargement
+    console.log('No saved imap yet (first load)');
   }
 
   for(const fname of frameNames) {
