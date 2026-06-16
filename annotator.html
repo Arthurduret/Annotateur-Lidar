@@ -1167,7 +1167,31 @@ function renderCls() {
 // THREE.JS SETUP
 // ═══════════════════════════════════════════════════════════════
 const canvas = document.getElementById('c');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+function createRenderer() {
+  // Certains environnements (VM, bureau distant, GPU bloqué) refusent un
+  // contexte WebGL "performant" par défaut — on retente avec des options
+  // plus permissives avant d'abandonner.
+  const attempts = [
+    { canvas, antialias: true },
+    { canvas, antialias: false },
+    { canvas, antialias: false, failIfMajorPerformanceCaveat: false, powerPreference: 'low-power' },
+  ];
+  let lastErr;
+  for(const opts of attempts) {
+    try { return new THREE.WebGLRenderer(opts); }
+    catch(e) { lastErr = e; console.warn('WebGL renderer attempt failed:', JSON.stringify(opts), e.message); }
+  }
+  throw lastErr;
+}
+let renderer;
+try {
+  renderer = createRenderer();
+} catch(e) {
+  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;background:#0e1220;color:#ff5566;font-family:monospace;text-align:center;padding:24px">'
+    + '⚠ WebGL indisponible dans ce navigateur/cet environnement.<br>Impossible de créer le contexte 3D : ' + e.message
+    + '<br><br>Essaie un autre navigateur, ou vérifie que l\'accélération matérielle est activée.</div>';
+  throw e;
+}
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setClearColor(0x0e1220);
 const scene = new THREE.Scene();
