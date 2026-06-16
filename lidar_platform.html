@@ -1660,7 +1660,13 @@ async function openAnnotator(jobId) {
     + '&prefix='  + encodeURIComponent(storagePrefix)
     + '&v='       + Date.now();
 
-  view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
+  // Vider explicitement l'ancien iframe pour libérer son contexte WebGL avant
+  // d'en créer un nouveau (sinon les contextes s'accumulent jusqu'à la limite
+  // du navigateur et le nouvel annotateur plante silencieusement).
+  view.innerHTML = '';
+  setTimeout(() => {
+    view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
+  }, 50);
 
   if(job && job.state === 'new') {
     updateJobField(jobId, 'state', 'in progress');
@@ -1675,6 +1681,7 @@ function openAnnotatorWindow(jobId) {
 function closeAnnotator() {
   document.getElementById('ann-page').style.display = 'none';
   document.getElementById('main').querySelector('#content').style.display = '';
+  document.getElementById('ann-view').innerHTML = ''; // libère le contexte WebGL de l'iframe
   if(currentJobId) nav('jobs', currentProjectId, currentTaskId);
 }
 
