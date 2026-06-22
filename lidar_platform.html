@@ -673,18 +673,28 @@ function renderDashboard() {
       <div style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text2)">${s.l}</div>
     </div>`).join('');
 
-  // Jobs récents
+  // Jobs récents — en cours en priorité, puis par date de mise à jour
   const rj = document.getElementById('dash-recent-jobs');
   if(rj) {
-    const recent = [...JOBS].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6);
-    rj.innerHTML = recent.length ? recent.map(j=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 18px;border-bottom:1px solid var(--border);cursor:pointer" onclick="nav('jobs',null,'${j.id}')">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.frame_range||j.id.slice(0,8)}</div>
-          <div style="font-size:10px;color:var(--text2)">${j.frame_count} frames · ${j.cuboids||0} cuboïdes</div>
+    const recent = [...JOBS].sort((a,b) => {
+      const pri = {['in progress']:0, review:1, new:2, completed:3};
+      const pa = pri[a.state]??2, pb = pri[b.state]??2;
+      if(pa !== pb) return pa - pb;
+      return new Date(b.updated_at) - new Date(a.updated_at);
+    }).slice(0, 8);
+    rj.innerHTML = recent.length ? recent.map(j => {
+      const task  = TASKS.find(t => t.id === j.task_id);
+      const stCls = j.state==='completed'?'badge-green':j.state==='in progress'?'badge-amber':j.state==='review'?'badge-purple':'badge-grey';
+      const canAnnot = j.state !== 'completed';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="nav('jobs',null,'${j.task_id}')">
+          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.name||j.frame_range||j.id.slice(0,8)}</div>
+          <div style="font-size:10px;color:var(--text2)">${task?.name||'—'} · ${j.frame_count||0} frames · ${j.cuboids||0} cuboïdes</div>
         </div>
-        <span class="badge ${j.state==='completed'?'badge-green':j.state==='in progress'?'badge-amber':'badge-grey'}">${j.state}</span>
-      </div>`).join('') : '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucun job</div>';
+        <span class="badge ${stCls}" style="flex-shrink:0">${j.state}</span>
+        ${canAnnot ? `<button onclick="openAnnotator('${j.id}')" style="padding:3px 10px;border-radius:4px;background:var(--cyan);color:#000;border:none;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">▶ Annoter</button>` : ''}
+      </div>`;
+    }).join('') : '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text2)">Aucun job</div>';
   }
 
   // Activité récente (jobs mis à jour récemment)
