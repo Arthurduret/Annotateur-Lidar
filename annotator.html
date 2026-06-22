@@ -3074,7 +3074,11 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   // Restaurer les classes/instances avec leurs num EXACTS
   if(savedClasses && savedClasses.length > 0) {
     // Reconstruire S.classes depuis le snapshot sauvegardé
-    S.classes = savedClasses.map(c => ({
+    // Déduplication au cas où une session précédente aurait sauvegardé des IDs en double
+    const seenIds = new Set();
+    S.classes = savedClasses
+      .filter(c => { if(seenIds.has(c.id)) return false; seenIds.add(c.id); return true; })
+      .map(c => ({
       ...c,
       pts: new Set(), // pts sera reconstruit par updateColors
     }));
