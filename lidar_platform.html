@@ -495,6 +495,22 @@ let JOBS = [];
 // ════════════════════════════════════════════════════════
 // LOGIN
 // ════════════════════════════════════════════════════════
+(function autoLogin() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('lidar_me') || 'null');
+    if(!saved?.name) return;
+    ME = { name: saved.name, role: saved.role||'annotator', initials: saved.name.slice(0,2).toUpperCase(), color: userColor(saved.name) };
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('app').style.flexDirection = 'column';
+    document.getElementById('user-avatar').textContent = ME.initials;
+    document.getElementById('user-avatar').style.background = ME.color;
+    document.getElementById('user-name-display').textContent = ME.name;
+    db.from('presence').upsert({ username: ME.name, role: ME.role, last_seen: new Date().toISOString() }).then(()=>{});
+    initApp();
+  } catch(e) { localStorage.removeItem('lidar_me'); }
+})();
+
 async function doLogin() {
   const name = document.getElementById('login-name').value.trim().toLowerCase();
   const role = document.getElementById('login-role').value;
@@ -504,6 +520,7 @@ async function doLogin() {
 
   err.textContent = '';
   ME = { name, role, initials: name.slice(0,2).toUpperCase(), color: userColor(name) };
+  localStorage.setItem('lidar_me', JSON.stringify({ name, role }));
 
   // Enregistrer la présence
   await db.from('presence').upsert({ username: name, role, last_seen: new Date().toISOString() });
