@@ -2393,6 +2393,7 @@ function saveCurrentFrame() {
 
 function loadFrame(idx) {
   if(idx < 0 || idx >= S.frames.length) return;
+  if(window._platformJobId) try { localStorage.setItem('lidar_frame_' + window._platformJobId, idx); } catch(e) {}
   saveCurrentFrame();
 
   S.frameIdx = idx;
@@ -2994,6 +2995,7 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     const imapPath = prefix + 'imap.json';
     const { error: se } = await db.storage.from(bucket).upload(imapPath, blob, { upsert: true });
     if(se) console.warn('imap save error:', se.message);
+    else if(pcdCache) try { await pcdCache.delete(`lidar-pcd://${jobId}/__imap__`); } catch(e) {}
 
     // 4. ann_data (cuboïdes) dans la table jobs
     const annData = {};
@@ -3060,10 +3062,23 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
   let savedClasses = null;
   let payload_ref  = {};
   try {
-    const imapPath = prefix + 'imap.json';
-    const { data: imapFile, error: imapErr } = await db.storage.from(bucket).download(imapPath);
-    if(!imapErr && imapFile) {
-      const payload = JSON.parse(await imapFile.text());
+    const imapPath   = prefix + 'imap.json';
+    const imapCacheKey = `lidar-pcd://${jobId}/__imap__`;
+    let imapText = null;
+    // Chercher imap dans le cache d'abord
+    if(pcdCache) {
+      try { const c = await pcdCache.match(imapCacheKey); if(c) imapText = await c.text(); } catch(e) {}
+    }
+    if(!imapText) {
+      const { data: imapFile, error: imapErr } = await db.storage.from(bucket).download(imapPath);
+      if(!imapErr && imapFile) {
+        imapText = await imapFile.text();
+        // Mettre en cache — sera invalidé par saveToSupabase à chaque sauvegarde
+        if(pcdCache) try { await pcdCache.put(imapCacheKey, new Response(imapText)); } catch(e) {}
+      }
+    }
+    if(imapText) {
+      const payload = JSON.parse(imapText);
       // Nouveau format : {classes, imap}
       if(payload.classes && payload.imap) {
         savedClasses    = payload.classes;
@@ -3187,7 +3202,8 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   if(withPCD > 0) {
     setStatus(`✓ ${withPCD} PCD · ${withImap} annotations restaurées`, 'var(--green)');
-    loadFrame(0);
+    const lastIdx = parseInt(localStorage.getItem('lidar_frame_' + jobId) || '0');
+    loadFrame(Math.min(lastIdx, framesToAdd.length - 1));
   } else {
     setStatus(`⚠ Uploadez les PCD via la plateforme`, 'var(--amber)');
     toast('Aucun PCD dans Supabase Storage — uploadez-les depuis la page Jobs', 'var(--amber)');
