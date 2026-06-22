@@ -540,7 +540,7 @@ const S = {
 // ═══════════════════════════════════════════════════════════════
 // CLASS MANAGEMENT
 // ═══════════════════════════════════════════════════════════════
-let _clsSeq = 0;
+var _clsSeq = 0;
 function mkCls(name, color) {
   return { id: 'cls_' + (++_clsSeq), name, color, title: name, num: _clsSeq, pts: new Set() };
 }
@@ -1001,7 +1001,7 @@ const CLASS_TYPES = [
   { type: 'Eolienne',          color: '#2ed573' },
 ];
 // Compteur d'instances par type
-const _instCount = {};
+var _instCount = {};
 
 function mkInstance(typeIdx) {
   const t = CLASS_TYPES[typeIdx];
