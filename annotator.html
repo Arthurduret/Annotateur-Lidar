@@ -2899,9 +2899,6 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     </span>
   `;
   document.body.insertBefore(banner, document.body.firstChild);
-  // Ajuster hauteur si l'élément existe
-  const appEl = document.getElementById('main') || document.getElementById('app') || document.body;
-  if(appEl && appEl !== document.body) appEl.style.height = 'calc(100vh - 36px)';
 
   const setStatus = (msg, color='var(--text2)') => {
     const el = document.getElementById('platform-status');
