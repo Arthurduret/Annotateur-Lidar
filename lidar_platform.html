@@ -310,13 +310,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
     </div>
     <label class="login-label">Nom d'utilisateur</label>
     <input class="login-input" id="login-name" placeholder="ex: arthur" maxlength="20" autocomplete="off">
-    <label class="login-label">Rôle</label>
-    <select class="login-input" id="login-role" style="cursor:pointer">
-      <option value="annotator">Annotateur</option>
-      <option value="reviewer">Relecteur</option>
-      <option value="admin">Administrateur</option>
-    </select>
-    <button class="login-btn" onclick="doLogin()">Connexion</button>
+    <label class="login-label">Mot de passe</label>
+    <input class="login-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <button class="login-btn" id="login-btn" onclick="doLogin()">Connexion</button>
     <div class="login-err" id="login-err"></div>
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b1);font-size:10px;color:var(--t3);text-align:center">
       Les données sont synchronisées en temps réel avec votre équipe via Supabase
@@ -342,9 +338,16 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
     <div class="tb-right">
       <div id="rt-status"><div class="rt-dot" id="rt-dot"></div><span id="rt-label">Connexion...</span></div>
       <div class="online-users" id="online-users"></div>
-      <div class="tb-user" id="tb-user-btn">
+      <div class="tb-user" id="tb-user-btn" onclick="openUserMenu()">
         <div class="avatar" id="user-avatar">?</div>
         <span style="font-size:12px;color:var(--t2)" id="user-name-display">—</span>
+      </div>
+      <!-- USER MENU DROPDOWN -->
+      <div id="user-menu" style="display:none;position:fixed;top:48px;right:12px;z-index:500;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:0 8px 24px rgba(0,0,0,.5);min-width:180px;padding:6px 0">
+        <div id="user-menu-admin" style="display:none;border-bottom:1px solid var(--b1);padding-bottom:6px;margin-bottom:6px">
+          <div onclick="openAdminPanel();closeUserMenu()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:var(--cyan)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><i class="ti ti-users" style="margin-right:6px"></i>Gérer les utilisateurs</div>
+        </div>
+        <div onclick="doLogout();closeUserMenu()" style="padding:8px 16px;cursor:pointer;font-size:12px;color:var(--red)" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''"><i class="ti ti-logout" style="margin-right:6px"></i>Se déconnecter</div>
       </div>
     </div>
   </div>
@@ -434,6 +437,44 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 
     </div>
 
+    <!-- ── ADMIN PANEL MODAL ── -->
+    <div id="admin-modal" style="position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center">
+      <div style="background:var(--s1);border:1px solid var(--b2);border-radius:12px;width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--b1)">
+          <span style="font-weight:600;font-size:14px">Administration</span>
+          <button class="btn btn-ghost btn-sm" onclick="closeAdminPanel()"><i class="ti ti-x"></i></button>
+        </div>
+        <!-- Tabs -->
+        <div style="display:flex;border-bottom:1px solid var(--b1)">
+          <button id="atab-users" onclick="switchAdminTab('users')" style="padding:10px 20px;font-size:12px;font-weight:600;color:var(--cyan);border:none;border-bottom:2px solid var(--cyan);background:transparent;cursor:pointer">Utilisateurs</button>
+          <button id="atab-activity" onclick="switchAdminTab('activity')" style="padding:10px 20px;font-size:12px;font-weight:600;color:var(--t2);border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer">Activité</button>
+        </div>
+        <!-- TAB: Users -->
+        <div id="admin-tab-users" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+          <div style="padding:16px 20px;border-bottom:1px solid var(--b1)">
+            <div style="font-size:11px;color:var(--t2);font-weight:600;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Créer un utilisateur</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input id="new-user-name" class="login-input" placeholder="Nom d'utilisateur" style="margin:0;flex:1;min-width:120px">
+              <input id="new-user-pass" class="login-input" type="password" placeholder="Mot de passe" style="margin:0;flex:1;min-width:120px">
+              <select id="new-user-role" class="login-input" style="margin:0;cursor:pointer;flex:1;min-width:120px">
+                <option value="annotator">Annotateur</option>
+                <option value="reviewer">Relecteur</option>
+                <option value="admin">Administrateur</option>
+              </select>
+              <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--t2);cursor:pointer;white-space:nowrap">
+                <input type="checkbox" id="new-user-admin"> Admin
+              </label>
+              <button class="btn btn-primary btn-sm" onclick="createUser()" style="white-space:nowrap"><i class="ti ti-plus"></i> Créer</button>
+            </div>
+            <div id="admin-msg" style="font-size:11px;margin-top:8px;min-height:16px"></div>
+          </div>
+          <div id="admin-user-list" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+        </div>
+        <!-- TAB: Activity -->
+        <div id="admin-tab-activity" style="display:none;flex:1;overflow-y:auto;padding:8px 0"></div>
+      </div>
+    </div>
+
     <!-- ── ANNOTATEUR ── -->
     <div id="ann-page">
       <div id="ann-header">
@@ -491,6 +532,7 @@ let onlineUsers = {};
 let PROJECTS = [];
 let TASKS = [];
 let JOBS = [];
+let USERS = [];
 
 // ════════════════════════════════════════════════════════
 // LOGIN
@@ -499,7 +541,7 @@ let JOBS = [];
   try {
     const saved = JSON.parse(localStorage.getItem('lidar_me') || 'null');
     if(!saved?.name) return;
-    ME = { name: saved.name, role: saved.role||'annotator', initials: saved.name.slice(0,2).toUpperCase(), color: userColor(saved.name) };
+    ME = { name: saved.name, role: saved.role||'annotator', is_admin: !!saved.is_admin, initials: saved.name.slice(0,2).toUpperCase(), color: userColor(saved.name) };
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('app').style.flexDirection = 'column';
@@ -518,32 +560,251 @@ let JOBS = [];
   } catch(e) { localStorage.removeItem('lidar_me'); }
 })();
 
-async function doLogin() {
-  const name = document.getElementById('login-name').value.trim().toLowerCase();
-  const role = document.getElementById('login-role').value;
-  const err  = document.getElementById('login-err');
-  if(!name) { err.textContent = 'Entrez un nom d\'utilisateur'; return; }
-  if(name.length < 2) { err.textContent = 'Minimum 2 caractères'; return; }
-
-  err.textContent = '';
-  ME = { name, role, initials: name.slice(0,2).toUpperCase(), color: userColor(name) };
-  localStorage.setItem('lidar_me', JSON.stringify({ name, role }));
-
-  // Enregistrer la présence
-  await db.from('presence').upsert({ username: name, role, last_seen: new Date().toISOString() });
-
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  document.getElementById('app').style.flexDirection = 'column';
-
-  document.getElementById('user-avatar').textContent = ME.initials;
-  document.getElementById('user-avatar').style.background = ME.color;
-  document.getElementById('user-name-display').textContent = ME.name;
-
-  await initApp();
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-document.getElementById('login-name').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+async function doLogin() {
+  const name = document.getElementById('login-name').value.trim().toLowerCase();
+  const pass = document.getElementById('login-pass').value;
+  const err  = document.getElementById('login-err');
+  const btn  = document.getElementById('login-btn');
+  if(!name) { err.textContent = 'Entrez un nom d\'utilisateur'; return; }
+  if(!pass) { err.textContent = 'Entrez votre mot de passe'; return; }
+
+  err.textContent = '';
+  btn.textContent = 'Connexion…';
+  btn.disabled = true;
+
+  try {
+    const hash = await sha256(pass);
+    const { data: users, error } = await db.from('users').select('username,role,is_admin,active').eq('username', name).eq('password_hash', hash).eq('active', true);
+    if(error || !users || users.length === 0) {
+      err.textContent = 'Identifiant ou mot de passe incorrect';
+      btn.textContent = 'Connexion';
+      btn.disabled = false;
+      return;
+    }
+    const u = users[0];
+    const role = u.role || 'annotator';
+    ME = { name: u.username, role, is_admin: !!u.is_admin, initials: u.username.slice(0,2).toUpperCase(), color: userColor(u.username) };
+    localStorage.setItem('lidar_me', JSON.stringify({ name: ME.name, role, is_admin: ME.is_admin }));
+
+    await db.from('presence').upsert({ username: ME.name, role, last_seen: new Date().toISOString() });
+
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('app').style.flexDirection = 'column';
+
+    document.getElementById('user-avatar').textContent = ME.initials;
+    document.getElementById('user-avatar').style.background = ME.color;
+    document.getElementById('user-name-display').textContent = ME.name;
+
+    await initApp();
+  } catch(e) {
+    err.textContent = 'Erreur de connexion, réessayez';
+    btn.textContent = 'Connexion';
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('login-name').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
+document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+function doLogout() {
+  localStorage.removeItem('lidar_me');
+  localStorage.removeItem('lidar_nav');
+  localStorage.removeItem('lidar_ann');
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-name').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').textContent = '';
+  document.getElementById('login-btn').textContent = 'Connexion';
+  document.getElementById('login-btn').disabled = false;
+}
+
+function openUserMenu() {
+  const menu = document.getElementById('user-menu');
+  const adminItem = document.getElementById('user-menu-admin');
+  if(ME?.is_admin) adminItem.style.display = 'block'; else adminItem.style.display = 'none';
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function closeUserMenu() {
+  document.getElementById('user-menu').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+  if(!document.getElementById('tb-user-btn')?.contains(e.target) && !document.getElementById('user-menu')?.contains(e.target)) {
+    closeUserMenu();
+  }
+});
+
+function switchAdminTab(tab) {
+  document.getElementById('admin-tab-users').style.display = tab==='users' ? 'flex' : 'none';
+  document.getElementById('admin-tab-activity').style.display = tab==='activity' ? 'block' : 'none';
+  document.getElementById('atab-users').style.color = tab==='users' ? 'var(--cyan)' : 'var(--t2)';
+  document.getElementById('atab-users').style.borderBottomColor = tab==='users' ? 'var(--cyan)' : 'transparent';
+  document.getElementById('atab-activity').style.color = tab==='activity' ? 'var(--cyan)' : 'var(--t2)';
+  document.getElementById('atab-activity').style.borderBottomColor = tab==='activity' ? 'var(--cyan)' : 'transparent';
+  if(tab==='activity') loadAdminActivity();
+}
+
+async function openAdminPanel() {
+  if(!ME?.is_admin) return;
+  document.getElementById('admin-modal').style.display = 'flex';
+  switchAdminTab('users');
+  await loadAdminUsers();
+}
+
+function closeAdminPanel() {
+  document.getElementById('admin-modal').style.display = 'none';
+}
+
+async function loadAdminUsers() {
+  const list = document.getElementById('admin-user-list');
+  list.innerHTML = '<div style="padding:16px 20px;color:var(--t2);font-size:12px">Chargement…</div>';
+  const [{ data: users }, { data: presence }] = await Promise.all([
+    db.from('users').select('id,username,role,is_admin,active,created_at').order('created_at'),
+    db.from('presence').select('username,last_seen'),
+  ]);
+  if(!users) { list.innerHTML = '<div style="padding:16px 20px;color:var(--red);font-size:12px">Erreur de chargement</div>'; return; }
+  const presMap = Object.fromEntries((presence||[]).map(p=>[p.username, p.last_seen]));
+  list.innerHTML = users.map(u => {
+    const lastSeen = presMap[u.username];
+    const lastSeenStr = lastSeen ? timeAgo(lastSeen) : 'Jamais connecté';
+    const isOnline = lastSeen && (Date.now() - new Date(lastSeen)) < 5*60*1000;
+    const jobsDone = JOBS.filter(j=>j.assignee===u.username && j.state==='completed').length;
+    const jobsInProg = JOBS.filter(j=>j.assignee===u.username && j.state==='in progress').length;
+    const totalCubs = JOBS.filter(j=>j.assignee===u.username).reduce((s,j)=>s+(j.cuboids||0),0);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--b1)">
+      <div style="position:relative;flex-shrink:0">
+        <div class="avatar" style="background:${userColor(u.username)}">${u.username.slice(0,2).toUpperCase()}</div>
+        ${isOnline?'<div style="position:absolute;bottom:0;right:0;width:8px;height:8px;background:var(--green);border-radius:50%;border:1px solid var(--s1)"></div>':''}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px">
+          ${u.username}
+          ${u.is_admin?'<span style="font-size:10px;color:var(--amber);background:var(--amber2);padding:1px 5px;border-radius:3px">Admin</span>':''}
+          <span style="font-size:10px;color:var(--t2)">${u.role}</span>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${isOnline?'<span style="color:var(--green)">● En ligne</span>':'⏱ '+lastSeenStr}</div>
+      </div>
+      <div style="display:flex;gap:16px;text-align:center;flex-shrink:0">
+        <div title="Jobs terminés"><div style="font-size:14px;font-weight:600;color:var(--green)">${jobsDone}</div><div style="font-size:10px;color:var(--t2)">terminés</div></div>
+        <div title="En cours"><div style="font-size:14px;font-weight:600;color:var(--amber)">${jobsInProg}</div><div style="font-size:10px;color:var(--t2)">en cours</div></div>
+        <div title="Cuboïdes annotés"><div style="font-size:14px;font-weight:600;color:var(--cyan)">${totalCubs}</div><div style="font-size:10px;color:var(--t2)">cuboïdes</div></div>
+      </div>
+      <span style="font-size:10px;padding:2px 8px;border-radius:3px;flex-shrink:0;${u.active?'color:var(--green);background:var(--green2)':'color:var(--red);background:var(--red2)'}">${u.active?'Actif':'Désactivé'}</span>
+      ${u.username!==ME.name?`<button class="btn btn-ghost btn-sm" onclick="toggleUserActive('${u.id}',${u.active})" style="font-size:11px;flex-shrink:0;${u.active?'color:var(--red)':'color:var(--green)'}">${u.active?'Désactiver':'Activer'}</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function loadAdminActivity() {
+  const panel = document.getElementById('admin-tab-activity');
+  panel.innerHTML = '<div style="padding:16px 20px;color:var(--t2);font-size:12px">Chargement…</div>';
+
+  const unassigned = JOBS.filter(j=>!j.assignee && j.state!=='completed').sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+  const assigned = JOBS.filter(j=>j.assignee).sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+  const byUser = {};
+  for(const j of assigned) {
+    if(!byUser[j.assignee]) byUser[j.assignee] = [];
+    byUser[j.assignee].push(j);
+  }
+
+  const userOpts = `<option value="">— Non assigné —</option>` + USERS.map(u=>`<option value="${u.username}">${u.username}</option>`).join('');
+
+  const unassignedBlock = unassigned.length ? `
+    <div style="padding:14px 20px;border-bottom:1px solid var(--b1)">
+      <div style="font-size:11px;font-weight:600;color:var(--amber);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">
+        <i class="ti ti-alert-triangle" style="margin-right:4px"></i>${unassigned.length} job${unassigned.length>1?'s':''} non assigné${unassigned.length>1?'s':''}
+      </div>
+      ${unassigned.map(j=>{
+        const task = TASKS.find(t=>t.id===j.task_id);
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--b1)">
+          <span style="flex:1;font-size:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">#${j.id?.slice(-6)} · ${j.name||task?.name||'—'}</span>
+          <span style="font-size:10px;color:var(--t2);flex-shrink:0">${j.frame_count||0} frames</span>
+          <select style="background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-size:11px;padding:3px 6px;border-radius:var(--r);cursor:pointer"
+            onchange="assignJobFromAdmin('${j.id}',this.value,this)">${userOpts}</select>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  const assignedBlock = Object.keys(byUser).length ? Object.entries(byUser).map(([user, jobs]) => {
+    const done = jobs.filter(j=>j.state==='completed').length;
+    const inprog = jobs.filter(j=>j.state==='in progress').length;
+    const totalCubs = jobs.reduce((s,j)=>s+(j.cuboids||0),0);
+    const jobRows = jobs.map(j => {
+      const task = TASKS.find(t=>t.id===j.task_id);
+      const stColor = j.state==='completed'?'var(--green)':j.state==='in progress'?'var(--amber)':j.state==='on review'?'var(--purple)':'var(--t2)';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--b1)">
+        <div style="width:6px;height:6px;border-radius:50%;background:${stColor};flex-shrink:0"></div>
+        <span style="flex:1;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">#${j.id?.slice(-6)} · ${j.name||task?.name||'—'}</span>
+        <span style="font-size:10px;color:var(--t2);flex-shrink:0">${j.cuboids||0} cub.</span>
+        <span style="font-size:10px;color:${stColor};flex-shrink:0">${j.state}</span>
+        <span style="font-size:10px;color:var(--t3);flex-shrink:0">${timeAgo(j.updated_at)}</span>
+        <select style="background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-size:10px;padding:2px 4px;border-radius:var(--r);cursor:pointer"
+          onchange="assignJobFromAdmin('${j.id}',this.value,this)">
+          ${USERS.map(u=>`<option value="${u.username}" ${j.assignee===u.username?'selected':''}>${u.username}</option>`).join('')}
+          <option value="" ${!j.assignee?'selected':''}>— Retirer —</option>
+        </select>
+      </div>`;
+    }).join('');
+    return `<div style="padding:14px 20px;border-bottom:1px solid var(--b1)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div class="avatar" style="background:${userColor(user)}">${user.slice(0,2).toUpperCase()}</div>
+        <span style="font-weight:600;font-size:13px">${user}</span>
+        <span style="font-size:11px;color:var(--t2);margin-left:4px">${jobs.length} job${jobs.length>1?'s':''} · ${totalCubs} cuboïdes</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--green)">${done} terminé${done>1?'s':''}</span>
+        ${inprog?`<span style="font-size:10px;color:var(--amber)">${inprog} en cours</span>`:''}
+      </div>
+      ${jobRows}
+    </div>`;
+  }).join('') : '';
+
+  panel.innerHTML = unassignedBlock + assignedBlock || '<div style="padding:24px 20px;color:var(--t2);font-size:12px;text-align:center">Aucun job pour l\'instant</div>';
+}
+
+async function assignJobFromAdmin(jobId, username, selectEl) {
+  const val = username || null;
+  const { error } = await db.from('jobs').update({ assignee: val }).eq('id', jobId);
+  if(error) { toast('Erreur d\'assignation', 'var(--red)'); return; }
+  const j = JOBS.find(j=>j.id===jobId);
+  if(j) j.assignee = val;
+  toast(val ? `Job assigné à ${val}` : 'Assignation retirée', val ? 'var(--green)' : 'var(--amber)');
+  // Reload activity to reflect change
+  await loadAdminActivity();
+}
+
+async function createUser() {
+  const name = document.getElementById('new-user-name').value.trim().toLowerCase();
+  const pass = document.getElementById('new-user-pass').value;
+  const role = document.getElementById('new-user-role').value;
+  const is_admin = document.getElementById('new-user-admin').checked;
+  const msg = document.getElementById('admin-msg');
+
+  if(!name || name.length < 2) { msg.style.color='var(--red)'; msg.textContent='Nom trop court (min 2 caractères)'; return; }
+  if(!pass || pass.length < 4) { msg.style.color='var(--red)'; msg.textContent='Mot de passe trop court (min 4 caractères)'; return; }
+
+  const hash = await sha256(pass);
+  const { error } = await db.from('users').insert({ username: name, password_hash: hash, role, is_admin });
+  if(error) { msg.style.color='var(--red)'; msg.textContent=error.message.includes('unique')?'Ce nom d\'utilisateur existe déjà':'Erreur: '+error.message; return; }
+  msg.style.color='var(--green)';
+  msg.textContent='Utilisateur créé avec succès !';
+  document.getElementById('new-user-name').value='';
+  document.getElementById('new-user-pass').value='';
+  document.getElementById('new-user-admin').checked=false;
+  setTimeout(()=>msg.textContent='', 3000);
+  await loadAdminUsers();
+}
+
+async function toggleUserActive(id, currently) {
+  await db.from('users').update({ active: !currently }).eq('id', id);
+  await loadAdminUsers();
+}
 
 function userColor(name) {
   const colors = ['linear-gradient(135deg,#00d4ff,#7c6bff)','linear-gradient(135deg,#00e676,#00d4ff)','linear-gradient(135deg,#ffb300,#ff6b35)','linear-gradient(135deg,#ff4444,#ff6bff)','linear-gradient(135deg,#7c6bff,#ff6bff)'];
@@ -565,10 +826,11 @@ async function initApp() {
 async function loadAll() {
   // Ne pas charger ann_data (peut être très gros) dans le select global
   // On le chargera uniquement quand on ouvre un job spécifique
-  const [{ data: projects, error: pe }, { data: tasks, error: te }, { data: jobs, error: je }] = await Promise.all([
+  const [{ data: projects, error: pe }, { data: tasks, error: te }, { data: jobs, error: je }, { data: users }] = await Promise.all([
     db.from('projects').select('*').order('created_at', {ascending:false}),
     db.from('tasks').select('*').order('created_at', {ascending:false}),
     db.from('jobs').select('id,task_id,name,frame_range,frame_count,frame_names,stage,state,assignee,cuboids,created_by,created_at,updated_at,storage_prefix,pcd_uploaded').order('created_at', {ascending:false}),
+    db.from('users').select('username,role,is_admin,active').eq('active', true).order('username'),
   ]);
   if(pe) console.error('projects error:', pe.message);
   if(te) console.error('tasks error:', te.message);
@@ -576,6 +838,7 @@ async function loadAll() {
   PROJECTS = projects || [];
   TASKS    = tasks    || [];
   JOBS     = jobs     || [];
+  USERS    = users    || [];
 }
 
 async function subscribeRealtime() {
@@ -981,7 +1244,8 @@ async function renderJobs() {
         <div class="job-field">
           <label>Assigné à</label>
           <select class="job-select" onchange="updateJobField('${j.id}','assignee',this.value)">
-            <option value="">— Sélectionner —</option>
+            <option value="">— Non assigné —</option>
+            ${USERS.map(u=>`<option value="${u.username}" ${j.assignee===u.username?'selected':''}>${u.username}${u.is_admin?' (admin)':''}</option>`).join('')}
           </select>
         </div>
         <div class="job-field">
@@ -1549,25 +1813,32 @@ async function doMergeTasks() {
   renderTasks();
 }
 
-// ── Upload PCD dans une tâche existante ──
+// ── Upload PCD directement dans une tâche → auto-création de jobs ──
 async function openUploadToTaskModal() {
   const task = TASKS.find(t => t.id === currentTaskId);
-  if(!task) { toast('Ouvre une tâche d\'abord', '#ff4444'); return; }
+  if(!task) { toast('Sélectionne une tâche d\'abord', '#ff4444'); return; }
   const proj = PROJECTS.find(p => p.id === task.project_id);
+  const prefix = 'pcd/' + (proj?.id || 'shared') + '/';
 
   openModal('Ajouter des frames — ' + task.name, `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-      <label style="font-size:10px;text-transform:uppercase;color:var(--t2);white-space:nowrap">Frames par job</label>
-      <input class="form-i" id="utask-chunk" type="number" value="50" min="1" max="500" style="width:80px" oninput="updateUTaskPreview()">
+    <div style="font-size:12px;color:var(--t2);margin-bottom:14px;line-height:1.6">
+      Glisse <b style="color:var(--t1)">tous tes fichiers PCD</b> ici. Ils seront uploadés dans Supabase et
+      découpés automatiquement en jobs de la taille choisie, prêts à annoter.
     </div>
-    <div style="border:2px dashed var(--b2);border-radius:8px;padding:28px;text-align:center;cursor:pointer;transition:all .2s"
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <label style="font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--t2);white-space:nowrap">Frames par job</label>
+      <input class="form-i" id="utask-chunk" type="number" value="50" min="1" max="500" style="width:80px" oninput="updateUTaskPreview()">
+      <span style="font-size:11px;color:var(--t3)">ex: 50 fichiers PCD = 1 job de 50 frames</span>
+    </div>
+    <div style="border:2px dashed var(--b2);border-radius:8px;padding:28px;text-align:center;cursor:pointer;transition:all .2s" id="utask-drop"
          onclick="document.getElementById('utask-input').click()"
          ondragover="event.preventDefault();this.style.borderColor='var(--cyan)'"
          ondragleave="this.style.borderColor='var(--b2)'"
          ondrop="event.preventDefault();this.style.borderColor='var(--b2)';window._utaskFiles=[...event.dataTransfer.files];updateUTaskPreview()">
-      <div style="font-size:28px;margin-bottom:8px">📂</div>
+      <div style="font-size:30px;margin-bottom:8px">📂</div>
       <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px">Cliquer ou glisser les fichiers PCD</div>
-      <div style="font-size:11px;color:var(--t2)">.pcd · .xyz · .txt</div>
+      <div style="font-size:11px;color:var(--t2)">.pcd · .xyz · .txt — multi-sélection possible</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:6px">Stockage : lidar-files/${prefix}</div>
     </div>
     <input type="file" id="utask-input" multiple accept=".pcd,.xyz,.txt" style="display:none"
            onchange="window._utaskFiles=[...this.files];updateUTaskPreview()">
@@ -1580,7 +1851,7 @@ async function openUploadToTaskModal() {
     </div>
   `, `
     <button class="btn btn-ghost btn-sm" onclick="closeModal()">Annuler</button>
-    <button class="btn btn-primary btn-sm" id="utask-btn" onclick="doUploadToTask('${task.id}','${proj?.id||'shared'}')" disabled>
+    <button class="btn btn-primary btn-sm" id="utask-btn" onclick="doUploadToTask('${task.id}','${proj?.id||'shared'}','${prefix}')" disabled>
       <i class="ti ti-cloud-upload"></i> Uploader & créer les jobs
     </button>
   `);
@@ -1589,19 +1860,22 @@ async function openUploadToTaskModal() {
 
 function updateUTaskPreview() {
   const files = window._utaskFiles || [];
-  const btn   = document.getElementById('utask-btn');
+  const btn = document.getElementById('utask-btn');
   if(btn) btn.disabled = !files.length;
-  const prev  = document.getElementById('utask-preview');
+  const prev = document.getElementById('utask-preview');
   if(!prev) return;
   const chunk = parseInt(document.getElementById('utask-chunk')?.value) || 50;
+  const jobCount = Math.ceil(files.length / chunk);
   prev.innerHTML = files.length
-    ? `<div style="color:var(--cyan);margin-bottom:4px"><b>${files.length}</b> fichier(s) → <b>${Math.ceil(files.length/chunk)}</b> job(s) de ~${chunk} frames</div>
+    ? `<div style="color:var(--cyan);margin-bottom:4px">
+         <b>${files.length}</b> fichier(s) — <b>${jobCount}</b> job(s) de ~${chunk} frames
+       </div>
        <div style="color:var(--t3)">${Array.from(files).map(f=>f.name).slice(0,6).join(', ')}${files.length>6?' …':''}</div>`
     : '';
 }
 
-async function doUploadToTask(taskId, projectId) {
-  const files = Array.from(window._utaskFiles || []).sort((a,b)=>a.name.localeCompare(b.name));
+async function doUploadToTask(taskId, projectId, prefix) {
+  const files = Array.from(window._utaskFiles || []).sort((a,b) => a.name.localeCompare(b.name));
   if(!files.length) return;
   const chunk = parseInt(document.getElementById('utask-chunk')?.value) || 50;
 
@@ -1612,54 +1886,58 @@ async function doUploadToTask(taskId, projectId) {
   if(btn)  btn.disabled = true;
   if(prog) prog.style.display = 'block';
 
-  const frameNames = files.map(f => f.name.replace(/\.[^.]+$/, ''));
-  let jobsCreated = 0, totalUploaded = 0;
-  const existingCount = JOBS.filter(j=>j.task_id===taskId).length;
-
-  for(let i = 0; i < frameNames.length; i += chunk) {
-    const chunkFrames = frameNames.slice(i, i + chunk);
-    const chunkFiles  = files.slice(i, i + chunk);
-    const jobNum = existingCount + jobsCreated + 1;
-
-    const { data: job, error: je } = await db.from('jobs').insert({
-      task_id: taskId, name: 'Job '+jobNum,
-      frame_names: chunkFrames, frame_count: chunkFrames.length,
-      frame_range: chunkFrames[0]+(chunkFrames.length>1?' — '+chunkFrames[chunkFrames.length-1]:''),
-      storage_prefix: null, pcd_uploaded: false,
-      stage: 'annotation', state: 'new', cuboids: 0,
-      created_by: ME.name, updated_at: new Date().toISOString(),
-    }).select().single();
-
-    if(je || !job) { toast('Erreur job: '+(je?.message||'?'), '#ff4444'); continue; }
-
-    const prefix = 'pcd/' + projectId + '/' + job.id + '/';
-    let uploaded = 0;
-    for(const file of chunkFiles) {
-      if(lbl) lbl.textContent = 'Job '+(jobsCreated+1)+' — Upload '+(totalUploaded+1)+'/'+files.length+': '+file.name;
-      if(bar) bar.style.width = Math.round((totalUploaded/files.length)*90)+'%';
-      const { error: ue } = await db.storage.from('lidar-files').upload(prefix+file.name, file, {upsert:true});
-      if(!ue) { uploaded++; totalUploaded++; }
-      else console.warn('Upload:', file.name, ue.message);
-    }
-
-    await db.from('jobs').update({ storage_prefix: prefix, pcd_uploaded: uploaded>0 }).eq('id', job.id);
-    jobsCreated++;
+  // ── Étape 1 : upload des PCD vers Supabase Storage ──
+  let uploaded = 0;
+  for(const file of files) {
+    if(lbl) lbl.textContent = 'Upload ' + (uploaded+1) + '/' + files.length + ' — ' + file.name;
+    if(bar) bar.style.width = Math.round(uploaded / files.length * 80) + '%';
+    const { error } = await db.storage.from('lidar-files').upload(prefix + file.name, file, { upsert: true });
+    if(error) console.warn('Upload warning:', file.name, error.message);
+    uploaded++;
   }
 
-  const task = TASKS.find(t=>t.id===taskId);
+  if(lbl) lbl.textContent = 'Création des jobs...';
+  if(bar) bar.style.width = '85%';
+
+  // ── Étape 2 : créer les jobs par chunks ──
+  const frameNames = files.map(f => f.name.replace(/\.[^.]+$/, ''));
+  let jobsCreated = 0;
+  for(let i = 0; i < frameNames.length; i += chunk) {
+    const chunkFrames = frameNames.slice(i, i + chunk);
+    const { error: je } = await db.from('jobs').insert({
+      task_id:        taskId,
+      frame_names:    chunkFrames,
+      frame_count:    chunkFrames.length,
+      frame_range:    chunkFrames[0] + (chunkFrames.length > 1 ? ' — ' + chunkFrames[chunkFrames.length-1] : ''),
+      storage_prefix: prefix,
+      pcd_uploaded:   true,
+      stage:          'annotation',
+      state:          'new',
+      cuboids:        0,
+      created_by:     ME.name,
+      updated_at:     new Date().toISOString(),
+    });
+    if(je) console.error('Erreur job:', je.message);
+    else   jobsCreated++;
+  }
+
+  // ── Étape 3 : mettre à jour le frame_count de la tâche ──
+  const task = TASKS.find(t => t.id === taskId);
+  const prevCount = task?.frame_count || 0;
   await db.from('tasks').update({
-    frame_count: (task?.frame_count||0) + frameNames.length,
-    updated_at: new Date().toISOString()
+    frame_count: prevCount + frameNames.length,
+    updated_at:  new Date().toISOString(),
   }).eq('id', taskId);
 
-  if(bar) bar.style.width='100%';
-  if(lbl) lbl.textContent = jobsCreated+' job(s) créé(s) ✓';
+  if(bar) bar.style.width = '100%';
+  if(lbl) lbl.textContent = jobsCreated + ' job(s) créé(s) ✓';
+
   await loadAll();
   setTimeout(() => {
     closeModal();
-    toast(jobsCreated+' job(s) — '+totalUploaded+' PCD uploadés ✓', '#00e676');
+    toast(jobsCreated + ' job(s) créé(s) — ' + uploaded + ' PCD uploadés ✓', '#00e676');
     renderJobs();
-  }, 500);
+  }, 600);
 }
 
 async function openAnnotator(jobId) {
