@@ -507,7 +507,12 @@ let JOBS = [];
     document.getElementById('user-avatar').style.background = ME.color;
     document.getElementById('user-name-display').textContent = ME.name;
     db.from('presence').upsert({ username: ME.name, role: ME.role, last_seen: new Date().toISOString() }).then(()=>{});
-    initApp();
+    initApp().then(() => {
+      try {
+        const nav_saved = JSON.parse(localStorage.getItem('lidar_nav') || 'null');
+        if(nav_saved?.page) nav(nav_saved.page, nav_saved.projectId||null, nav_saved.taskId||null);
+      } catch(e) {}
+    });
   } catch(e) { localStorage.removeItem('lidar_me'); }
 })();
 
@@ -626,6 +631,8 @@ function nav(page, projectId=null, taskId=null) {
 
   if(projectId) currentProjectId = projectId;
   if(taskId) currentTaskId = taskId;
+
+  localStorage.setItem('lidar_nav', JSON.stringify({ page, projectId: currentProjectId, taskId: currentTaskId }));
 
   renderBreadcrumb();
 
