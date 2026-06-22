@@ -688,8 +688,8 @@ function renderDashboard() {
       const canAnnot = j.state !== 'completed';
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border)">
         <div style="flex:1;min-width:0;cursor:pointer" onclick="nav('jobs',null,'${j.task_id}')">
-          <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.name||j.frame_range||j.id.slice(0,8)}</div>
-          <div style="font-size:10px;color:var(--text2)">${task?.name||'—'} · ${j.frame_count||0} frames · ${j.cuboids||0} cuboïdes</div>
+          <div style="font-size:12px;font-weight:600;color:var(--cyan);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">#${j.id.slice(-6)} <span style="color:var(--text2);font-weight:400">${j.name?'· '+j.name:''}</span></div>
+          <div style="font-size:10px;color:var(--text2)">${task?.name||'—'} · ${j.frame_range||j.frame_count+' frames'} · ${j.cuboids||0} cuboïdes</div>
         </div>
         <span class="badge ${stCls}" style="flex-shrink:0">${j.state}</span>
         ${canAnnot ? `<button onclick="openAnnotator('${j.id}')" style="padding:3px 10px;border-radius:4px;background:var(--cyan);color:#000;border:none;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">▶ Annoter</button>` : ''}
