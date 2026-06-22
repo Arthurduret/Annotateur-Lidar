@@ -2379,8 +2379,12 @@ function saveCurrentFrame() {
   f.cuboids  = JSON.parse(JSON.stringify(S.cuboids));
   f.undoStack = S.undoStack.slice();
   f.redoStack = S.redoStack.slice();
-  // Sauvegarder état caméra
+  // Sauvegarder état caméra (mémoire + localStorage pour persistance entre rechargements)
   f.cam = { azim: camAzim, elev: camElev, dist: camDist, tgt: camTgt.clone() };
+  if(window._platformJobId) try {
+    localStorage.setItem('lidar_cam_' + window._platformJobId + '_' + S.frameIdx,
+      JSON.stringify({ azim: camAzim, elev: camElev, dist: camDist, tgt: { x: camTgt.x, y: camTgt.y, z: camTgt.z } }));
+  } catch(e) {}
   // Sauvegarder réglages d'affichage
   f.display = {
     ptSize:  +document.getElementById('sl-sz').value,
@@ -2440,12 +2444,19 @@ function loadFrame(idx) {
     }
     hideOverlay();
     updateColors();
-    // Restaurer caméra si sauvegardée, sinon garder la vue courante
-    if(f.cam) {
-      camAzim = f.cam.azim;
-      camElev = f.cam.elev;
-      camDist = f.cam.dist;
-      camTgt.copy(f.cam.tgt);
+    // Restaurer caméra : mémoire d'abord, sinon localStorage (survit aux rechargements)
+    let cam = f.cam;
+    if(!cam && window._platformJobId) {
+      try {
+        const stored = localStorage.getItem('lidar_cam_' + window._platformJobId + '_' + idx);
+        if(stored) cam = JSON.parse(stored);
+      } catch(e) {}
+    }
+    if(cam) {
+      camAzim = cam.azim;
+      camElev = cam.elev;
+      camDist = cam.dist;
+      if(cam.tgt) camTgt.set(cam.tgt.x, cam.tgt.y, cam.tgt.z);
       updateCam();
     }
     // Restaurer réglages d'affichage
