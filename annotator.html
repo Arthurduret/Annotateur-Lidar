@@ -2945,6 +2945,18 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   setStatus(`📂 ${frameNames.length} frames...`, 'var(--amber)');
 
+  // Remplacer la dropzone par un écran de chargement pendant le téléchargement
+  const _dropBox = document.getElementById('drop-box');
+  const _demoRow = document.querySelector('.demo-row');
+  if(_dropBox) _dropBox.style.display = 'none';
+  if(_demoRow) _demoRow.style.display = 'none';
+  const _progWrap  = document.getElementById('progress-wrap');
+  const _progLabel = document.getElementById('progress-label');
+  const _progBar   = document.getElementById('progress-bar');
+  if(_progWrap)  _progWrap.style.display  = 'block';
+  if(_progLabel) _progLabel.textContent   = `Connexion à Supabase — chargement de ${frameNames.length} frames...`;
+  if(_progBar)   _progBar.style.width     = '5%';
+
   // ── Fonction de sauvegarde centrale ──
   async function saveToSupabase(silent=false) {
     if(!silent) setAutosave('💾 Sauvegarde...', 'var(--amber)');
@@ -3150,6 +3162,8 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
     loadedCount++;
     if(loadedCount % 5 === 0 || loadedCount === frameNames.length) {
       setStatus(`📂 ${loadedCount}/${frameNames.length} frames...`, 'var(--amber)');
+      if(_progLabel) _progLabel.textContent = `Chargement ${loadedCount} / ${frameNames.length} frames...`;
+      if(_progBar)   _progBar.style.width   = Math.round(loadedCount / frameNames.length * 90) + '%';
     }
   }
 
