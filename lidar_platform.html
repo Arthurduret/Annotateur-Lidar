@@ -934,7 +934,7 @@ async function renderJobs() {
     return `
     <div class="job-card" id="jc-${j.id}">
       <div class="job-header">
-        <span class="job-id">#${j.id?.slice(-6)||'???'}</span>
+        <span class="job-id">#${j.id?.slice(-6)||'???'}${j.name?' · '+j.name:''}</span>
         <span class="stage ${stageClass}">${j.stage||'annotation'}</span>
         <span class="status ${stateClass}">${j.state||'new'}</span>
         <span class="job-meta">${j.frame_count||0} frames · ${j.frame_range||'—'}</span>
