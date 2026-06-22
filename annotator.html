@@ -3057,6 +3057,13 @@ setTimeout(()=>{resize();initClasses();renderShortcutsDisplay();},0);
 
   // ── Autosave toutes les 30 secondes ──
   const autosaveInterval = setInterval(() => saveToSupabase(true), 30000);
+  setInterval(() => {
+    try {
+      localStorage.setItem('lidar_frame_' + jobId, S.frameIdx);
+      localStorage.setItem('lidar_cam_' + jobId + '_' + S.frameIdx,
+        JSON.stringify({ azim: camAzim, elev: camElev, dist: camDist, tgt: { x: camTgt.x, y: camTgt.y, z: camTgt.z } }));
+    } catch(e) {}
+  }, 5000);
   setAutosave('Autosave actif', 'var(--text3)');
 
   // ── Sauvegarder quand on change de frame ──
