@@ -509,6 +509,8 @@ let JOBS = [];
     db.from('presence').upsert({ username: ME.name, role: ME.role, last_seen: new Date().toISOString() }).then(()=>{});
     initApp().then(() => {
       try {
+        const annJob = localStorage.getItem('lidar_ann');
+        if(annJob) { openAnnotator(annJob); return; }
         const nav_saved = JSON.parse(localStorage.getItem('lidar_nav') || 'null');
         if(nav_saved?.page) nav(nav_saved.page, nav_saved.projectId||null, nav_saved.taskId||null);
       } catch(e) {}
@@ -1702,6 +1704,8 @@ async function openAnnotator(jobId) {
     view.innerHTML = '<iframe src="' + annUrl + '" style="width:100%;height:100%;border:none;display:block" id="ann-iframe"></iframe>';
   }, 50);
 
+  localStorage.setItem('lidar_ann', jobId);
+
   if(job && job.state === 'new') {
     updateJobField(jobId, 'state', 'in progress');
   }
@@ -1716,6 +1720,7 @@ function closeAnnotator() {
   document.getElementById('ann-page').style.display = 'none';
   document.getElementById('main').querySelector('#content').style.display = '';
   document.getElementById('ann-view').innerHTML = ''; // libère le contexte WebGL de l'iframe
+  localStorage.removeItem('lidar_ann');
   if(currentJobId) nav('jobs', currentProjectId, currentTaskId);
 }
 
