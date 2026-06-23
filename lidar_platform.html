@@ -527,13 +527,74 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 
 <script>
 // ════════════════════════════════════════════════════════
-// CONFIG SUPABASE — remplacer avec vos valeurs
+// CONFIG SUPABASE
 // ════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://kuyuzuqhauhfgmgiqfqd.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt1eXV6dXFoYXVoZmdtZ2lxZnFkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwOTg0MzksImV4cCI6MjA5NjY3NDQzOX0.1fjIUAWlgdv-y4gxeSWvK9FARzxoRFNxQct6_BgBLbs';
 
-const { createClient } = supabase;
-const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+// ════════════════════════════════════════════════════════
+// CONFIG CLOUDFLARE R2 (remplace Supabase Storage)
+// ════════════════════════════════════════════════════════
+const R2_ACCOUNT_ID   = 'd9e935a9c9215e15c8e9086019a417e4';
+const R2_ACCESS_KEY   = '74ec534d1cc9e677dc3a2c41cb889368';
+const R2_SECRET_KEY   = 'VOTRE_SECRET_ICI'; // ← À REMPLIR
+const R2_BUCKET       = 'lidar-files';
+const R2_ENDPOINT     = `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+
+// ── Helpers SigV4 ──
+async function _r2Hmac(key, data) {
+  const k = key instanceof Uint8Array ? key : new TextEncoder().encode(key);
+  const ck = await crypto.subtle.importKey('raw', k, {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+  return new Uint8Array(await crypto.subtle.sign('HMAC', ck, new TextEncoder().encode(data)));
+}
+function _r2Hex(buf) { return Array.from(buf).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+async function _r2Hash(data) {
+  const buf = data instanceof Uint8Array ? data : (data instanceof ArrayBuffer ? new Uint8Array(data) : new TextEncoder().encode(String(data)));
+  return _r2Hex(new Uint8Array(await crypto.subtle.digest('SHA-256', buf)));
+}
+async function r2Fetch(method, key, body=null, contentType='application/octet-stream') {
+  const now = new Date();
+  const p = n => String(n).padStart(2,'0');
+  const ds = `${now.getUTCFullYear()}${p(now.getUTCMonth()+1)}${p(now.getUTCDate())}`;
+  const dt = `${ds}T${p(now.getUTCHours())}${p(now.getUTCMinutes())}${p(now.getUTCSeconds())}Z`;
+  const host = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+  const ek = key.split('/').map(s=>encodeURIComponent(s)).join('/');
+  const url = `${R2_ENDPOINT}/${R2_BUCKET}/${ek}`;
+  let bodyBuf = null;
+  if(body !== null) {
+    if(body instanceof Uint8Array) bodyBuf = body;
+    else if(body instanceof ArrayBuffer) bodyBuf = new Uint8Array(body);
+    else if(body instanceof Blob) bodyBuf = new Uint8Array(await body.arrayBuffer());
+    else if(body instanceof File) bodyBuf = new Uint8Array(await body.arrayBuffer());
+    else bodyBuf = new TextEncoder().encode(String(body));
+  }
+  const bh = bodyBuf ? await _r2Hash(bodyBuf) : 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
+  const hdrs = body !== null
+    ? [['content-type',contentType],['host',host],['x-amz-content-sha256',bh],['x-amz-date',dt]]
+    : [['host',host],['x-amz-content-sha256',bh],['x-amz-date',dt]];
+  hdrs.sort((a,b)=>a[0].localeCompare(b[0]));
+  const chdr = hdrs.map(([k,v])=>`${k}:${v}\n`).join('');
+  const shl  = hdrs.map(([k])=>k).join(';');
+  const cr   = [method,`/${R2_BUCKET}/${ek}`,'',chdr,shl,bh].join('\n');
+  const cs   = `${ds}/auto/s3/aws4_request`;
+  const sts  = ['AWS4-HMAC-SHA256',dt,cs,await _r2Hash(cr)].join('\n');
+  let sk = await _r2Hmac('AWS4'+R2_SECRET_KEY, ds);
+  sk = await _r2Hmac(sk,'auto'); sk = await _r2Hmac(sk,'s3'); sk = await _r2Hmac(sk,'aws4_request');
+  const sig  = _r2Hex(await _r2Hmac(sk, sts));
+  const auth = `AWS4-HMAC-SHA256 Credential=${R2_ACCESS_KEY}/${cs}, SignedHeaders=${shl}, Signature=${sig}`;
+  const fh   = {'x-amz-date':dt,'x-amz-content-sha256':bh,'authorization':auth};
+  if(body !== null) fh['content-type'] = contentType;
+  return fetch(url, {method, headers:fh, ...(bodyBuf?{body:bodyBuf}:{})});
+}
+async function r2Upload(key, body, contentType='application/octet-stream') {
+  const res = await r2Fetch('PUT', key, body, contentType);
+  if(!res.ok) throw new Error(`R2 upload ${key}: ${res.status} ${await res.text()}`);
+}
+async function r2Download(key) {
+  const res = await r2Fetch('GET', key);
+  if(!res.ok) return null;
+  return res.text();
+}
 
 // ════════════════════════════════════════════════════════
 // STATE
@@ -1495,8 +1556,8 @@ async function createTask() {
     for(const file of chunkFiles) {
       if(lbl) lbl.textContent = `Job ${jobNum} — Upload ${totalUploaded+1}/${files.length}: ${file.name}`;
       if(bar) bar.style.width = Math.round((totalUploaded/files.length)*95) + '%';
-      const { error } = await db.storage.from('lidar-files').upload(prefix+file.name, file, {upsert:true});
-      if(error) { toast('Erreur upload: '+error.message, '#ff4444'); if(btn) btn.disabled=false; return; }
+      try { await r2Upload(prefix+file.name, file); }
+      catch(e) { toast('Erreur upload: '+e.message, '#ff4444'); if(btn) btn.disabled=false; return; }
       uploaded++; totalUploaded++;
     }
 
@@ -1791,9 +1852,8 @@ async function doUploadPCDs(jobId, prefix) {
     if(lbl) lbl.textContent = 'Upload: ' + file.name + ' (' + (uploaded+1) + '/' + files.length + ')';
     if(bar) bar.style.width = Math.round(uploaded/files.length*100) + '%';
 
-    const { error } = await db.storage.from('lidar-files').upload(storagePath, file, { upsert: true });
-    if(error) console.warn('Upload error:', file.name, error.message);
-    else uploaded++;
+    try { await r2Upload(storagePath, file); uploaded++; }
+    catch(e) { console.warn('Upload error:', file.name, e.message); }
   }
 
   if(bar) bar.style.width = '100%';
@@ -1980,8 +2040,7 @@ async function doUploadToTask(taskId, projectId, prefix) {
   for(const file of files) {
     if(lbl) lbl.textContent = 'Upload ' + (uploaded+1) + '/' + files.length + ' — ' + file.name;
     if(bar) bar.style.width = Math.round(uploaded / files.length * 80) + '%';
-    const { error } = await db.storage.from('lidar-files').upload(prefix + file.name, file, { upsert: true });
-    if(error) console.warn('Upload warning:', file.name, error.message);
+    try { await r2Upload(prefix + file.name, file); } catch(e) { console.warn('Upload warning:', file.name, e.message); }
     uploaded++;
   }
 
