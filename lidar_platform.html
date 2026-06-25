@@ -531,6 +531,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--t1);font-
 // ════════════════════════════════════════════════════════
 const SUPABASE_URL = 'https://ayogtsjxtuyudjcgoxlo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_AeMcu403CaYhK61mUSBozg_40hv2Y42';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ════════════════════════════════════════════════════════
 // CONFIG CLOUDFLARE R2 (remplace Supabase Storage)
