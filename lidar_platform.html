@@ -620,11 +620,8 @@ let USERS = [];
 (function autoLogin() {
   try {
     const saved = JSON.parse(localStorage.getItem('lidar_me') || 'null');
-    const name = saved?.name || 'admin';
-    const role = saved?.role || 'admin';
-    const is_admin = saved?.is_admin !== undefined ? saved.is_admin : true;
-    ME = { name, role, is_admin, initials: name.slice(0,2).toUpperCase(), color: userColor(name) };
-    localStorage.setItem('lidar_me', JSON.stringify({ name: ME.name, role: ME.role, is_admin: ME.is_admin }));
+    if(!saved?.name) return;
+    ME = { name: saved.name, role: saved.role||'annotator', is_admin: !!saved.is_admin, initials: saved.name.slice(0,2).toUpperCase(), color: userColor(saved.name) };
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
     document.getElementById('app').style.flexDirection = 'column';
