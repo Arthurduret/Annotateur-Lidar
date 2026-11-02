@@ -359,6 +359,16 @@ canvas{display:block;position:absolute;inset:0;width:100%;height:100%}
   <div class="sec">
     <div class="sec-t">Affichage</div>
     <div class="ctrl-row">
+      <span class="ctrl-lbl">Couleur</span>
+      <select id="sel-color" style="flex:1;min-width:0;background:var(--bg);color:inherit;border:1px solid var(--border);border-radius:4px;padding:3px;font:inherit;font-size:11px">
+        <option value="range">Distance</option>
+        <option value="z">Hauteur</option>
+        <option value="refl">Réflectivité</option>
+        <option value="vel">Vitesse</option>
+        <option value="none">Uniforme</option>
+      </select>
+    </div>
+    <div class="ctrl-row">
       <span class="ctrl-lbl">Taille pts</span>
       <input class="ctrl-range" type="range" id="sl-sz" min=".5" max="8" step=".5" value="2">
       <span class="ctrl-val" id="cv-sz">2</span>
@@ -1212,7 +1222,7 @@ function initCloud() {
   cloudGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
   // Appliquer la taille de points courante
   const currentSize = +document.getElementById('sl-sz').value || 2;
-  cloudMat = new THREE.PointsMaterial({ vertexColors: true, size: currentSize, sizeAttenuation: true });
+  cloudMat = new THREE.PointsMaterial({ vertexColors: true, size: currentSize, sizeAttenuation: false }); // taille en pixels, quelle que soit l'échelle de la scène
   cloudMesh = new THREE.Points(cloudGeo, cloudMat);
   scene.add(cloudMesh);
   updateColors(); // refit() appelé conditionnellement par loadFrame
@@ -1225,9 +1235,46 @@ function hex2rgb(h) {
   return [r, g, b];
 }
 
+// Couleur des points non annotés selon le champ choisi
+function turboRGB(t) {
+  t = Math.min(1, Math.max(0, t));
+  const c = v => Math.min(1, Math.max(0, v));
+  return [
+    c(0.1357+t*(4.5974+t*(-42.3277+t*(130.5887+t*(-150.5666+t*58.1375))))),
+    c(0.0914+t*(2.1856+t*(4.8052+t*(-14.0195+t*(4.2109+t*2.7747))))),
+    c(0.1067+t*(12.5925+t*(-60.1097+t*(109.0745+t*(-88.5066+t*26.8183)))))
+  ];
+}
+function divergingRGB(t) {
+  t = Math.min(1, Math.max(0, t));
+  const lo=[.25,.55,.95], mid=[.72,.74,.76], hi=[.93,.3,.25];
+  const a = t<.5 ? lo : mid, b = t<.5 ? mid : hi, u = t<.5 ? t*2 : (t-.5)*2;
+  return a.map((v,i)=>v+(b[i]-v)*u);
+}
+let _baseCol = null, _basePts = null, _baseMode = null;
+function baseColors() {
+  const mode = document.getElementById('sel-color').value;
+  if (_basePts === S.pts && _baseMode === mode) return _baseCol;
+  _basePts = S.pts; _baseMode = mode; _baseCol = null;
+  const n = S.pts.length;
+  const get = { range:p=>Math.hypot(p.x,p.y,p.z), z:p=>p.z, refl:p=>p.refl, vel:p=>p.vel }[mode];
+  if (!get || !n || get(S.pts[0]) === undefined) return null;   // champ absent de ce fichier : couleur uniforme
+  const v = new Float32Array(n);
+  for (let i=0;i<n;i++) v[i] = get(S.pts[i]);
+  const sorted = Float32Array.from(v).sort();
+  let lo = sorted[Math.floor(n*.01)], hi = sorted[Math.floor(n*.99)];
+  const fn = mode==='vel' ? divergingRGB : turboRGB;
+  if (mode==='vel') { const k = Math.max(.5,Math.abs(lo),Math.abs(hi)); lo=-k; hi=k; }
+  if (hi<=lo) hi = lo+1;
+  const out = new Float32Array(n*3);
+  for (let i=0;i<n;i++) { const c = fn((v[i]-lo)/(hi-lo)); out[i*3]=c[0]; out[i*3+1]=c[1]; out[i*3+2]=c[2]; }
+  return _baseCol = out;
+}
+
 function updateColors() {
   if (!cloudGeo) return;
   const col = cloudGeo.attributes.color.array;
+  const base = baseColors();
   S.classes.forEach(c => c.pts = new Set());
 
   let nAnnot = 0;
@@ -1242,9 +1289,9 @@ function updateColors() {
         col[i*3+1] = (.30-.15*t)*f;
         col[i*3+2] = .05*f;
       } else {
-        col[i*3]   = SOL_RGB[0]*f;
-        col[i*3+1] = SOL_RGB[1]*f;
-        col[i*3+2] = SOL_RGB[2]*f;
+        col[i*3]   = (base ? base[i*3]   : SOL_RGB[0])*f;
+        col[i*3+1] = (base ? base[i*3+1] : SOL_RGB[1])*f;
+        col[i*3+2] = (base ? base[i*3+2] : SOL_RGB[2])*f;
       }
     } else {
       nAnnot++;
@@ -2196,7 +2243,7 @@ async function parsePCDAsync(text, onProgress) {
     }
   }
   const xi=fields.indexOf('x'),yi=fields.indexOf('y'),zi=fields.indexOf('z');
-  const li=fields.indexOf('label'),pi=fields.indexOf('prob');
+  const li=fields.indexOf('label'),pi=fields.indexOf('prob'),ri=fields.indexOf('reflectivity'),vi=fields.indexOf('velocity');
   if(xi<0||yi<0||zi<0) throw new Error('Champs x/y/z introuvables. Champs détectés: '+fields.join(', '));
   const dataLines=lines.slice(dataStart).filter(l=>l.trim());
   const total=dataLines.length;
@@ -2208,7 +2255,10 @@ async function parsePCDAsync(text, onProgress) {
       if(v.length<=Math.max(xi,yi,zi)) continue;
       const x=+v[xi],y=+v[yi],z=+v[zi];
       if(isNaN(x)||isNaN(y)||isNaN(z)) continue;
-      pts.push({x,y,z,label:li>=0?+v[li]:0,prob:pi>=0?+v[pi]:0});
+      const pt={x,y,z,label:li>=0?+v[li]:0,prob:pi>=0?+v[pi]:0};
+      if(ri>=0) pt.refl=+v[ri];
+      if(vi>=0) pt.vel=+v[vi];
+      pts.push(pt);
     }
     onProgress(Math.round(end/total*100),`Parsing... ${end.toLocaleString()} / ${total.toLocaleString()} pts`);
     await new Promise(r=>setTimeout(r,0));
@@ -2706,6 +2756,7 @@ document.getElementById('mb-erase').addEventListener('click',()=>setMode_('erase
 document.getElementById('mb-brush').addEventListener('click',()=>setMode_('brush'));
 document.getElementById('pill1').addEventListener('click',()=>{ if(S.pts.length) goPhase(1); });
 document.getElementById('pill2').addEventListener('click',()=>{ if(S.cuboids.length) goPhase(2); });
+document.getElementById('sel-color').addEventListener('change',e=>{updateColors();e.target.blur();});
 document.getElementById('sl-sz').addEventListener('input',e=>{document.getElementById('cv-sz').textContent=e.target.value;if(cloudMat)cloudMat.size=+e.target.value;});
 document.getElementById('sl-op').addEventListener('input',e=>{document.getElementById('cv-op').textContent=(+e.target.value).toFixed(2);S.solOp=+e.target.value;updateColors();});
 document.getElementById('sl-sel').addEventListener('input',e=>{document.getElementById('cv-sel').textContent=e.target.value;S.selSize=+e.target.value;});
